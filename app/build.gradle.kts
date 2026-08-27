@@ -4,57 +4,58 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// --- Unique-per-build identity ------------------------------------------------
+// Every build gets a distinct application id + label so that this fusion.apk and
+// any future fusion.apk install in PARALLEL instead of replacing each other.
+// CI passes -PfusionBuildId=<run number>; local builds fall back to a timestamp.
+val fusionBuildId: String =
+    (project.findProperty("fusionBuildId") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: (System.currentTimeMillis() / 1000L).toString().takeLast(6)
+
 android {
     namespace = "com.fusion.firewall"
     compileSdk = 34
 
     defaultConfig {
-        // Base application id. Product-flavor "slots" append a suffix so that
-        // several builds (and future versions) can be installed side by side.
+        // Base id + a unique suffix -> e.g. com.fusion.firewall.v123456
         applicationId = "com.fusion.firewall"
+        applicationIdSuffix = ".v$fusionBuildId"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.0.$fusionBuildId"
+
+        resValue("string", "app_label", "Fusion $fusionBuildId")
+        resValue("string", "vpn_session", "Fusion $fusionBuildId")
 
         vectorDrawables { useSupportLibrary = true }
     }
 
-    // --- Parallel / future installs -----------------------------------------
-    // Each slot produces a distinct applicationId + launcher label, so you can
-    // keep multiple Fusion builds installed at the same time and A/B test new
-    // versions without uninstalling the old one.
-    flavorDimensions += "slot"
-    productFlavors {
-        create("slotA") {
-            dimension = "slot"
-            applicationIdSuffix = ".slota"
-            resValue("string", "app_label", "Fusion")
-            resValue("string", "vpn_session", "Fusion (A)")
-        }
-        create("slotB") {
-            dimension = "slot"
-            applicationIdSuffix = ".slotb"
-            versionNameSuffix = "-B"
-            resValue("string", "app_label", "Fusion B")
-            resValue("string", "vpn_session", "Fusion (B)")
-        }
-        create("slotC") {
-            dimension = "slot"
-            applicationIdSuffix = ".slotc"
-            versionNameSuffix = "-C"
-            resValue("string", "app_label", "Fusion C")
-            resValue("string", "vpn_session", "Fusion (C)")
+    // Signing key. CI generates app/fusion.keystore at build time (it is never
+    // committed). When present it is used; otherwise the build falls back to the
+    // standard debug key so a local `assembleRelease` still produces an
+    // installable APK. Parallel installs never collide because each build has a
+    // unique application id, independent of the signature.
+    val keystoreFile = file("fusion.keystore")
+    signingConfigs {
+        create("shared") {
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = (project.findProperty("fusionStorePassword") as String?) ?: "fusion123"
+                keyAlias = (project.findProperty("fusionKeyAlias") as String?) ?: "fusion"
+                keyPassword = (project.findProperty("fusionKeyPassword") as String?) ?: "fusion123"
+            }
         }
     }
 
     buildTypes {
-        debug {
-            isMinifyEnabled = false
-        }
+        val signWith =
+            if (keystoreFile.exists()) signingConfigs.getByName("shared")
+            else signingConfigs.getByName("debug")
         release {
             isMinifyEnabled = false
             isShrinkResources = false
+            signingConfig = signWith
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

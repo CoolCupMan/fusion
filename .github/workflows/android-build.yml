@@ -29,27 +29,42 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Assemble debug APKs (all slots)
-        run: ./gradlew --no-daemon assembleDebug
+      - name: Generate signing key
+        run: |
+          keytool -genkeypair -v \
+            -keystore app/fusion.keystore \
+            -storepass fusion123 -keypass fusion123 -alias fusion \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Fusion, OU=Fusion, O=Fusion, L=NA, ST=NA, C=NA"
 
-      - name: Collect and rename APKs
+      - name: Build signed fusion.apk (unique app id)
+        run: ./gradlew --no-daemon assembleRelease -PfusionBuildId=${{ github.run_number }}
+
+      - name: Collect fusion.apk
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/slotA/debug/app-slotA-debug.apk dist/fusion.apk
-          cp app/build/outputs/apk/slotB/debug/app-slotB-debug.apk dist/fusion-slotb.apk
-          cp app/build/outputs/apk/slotC/debug/app-slotC-debug.apk dist/fusion-slotc.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/fusion.apk
           ls -la dist
 
-      - name: Upload APK artifacts
+      - name: Upload fusion.apk artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fusion-apks
-          path: dist/*.apk
+          name: fusion-apk
+          path: dist/fusion.apk
           if-no-files-found: error
 
-      - name: Publish release on tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      # Publish the raw fusion.apk as a Release asset so it downloads as a real
+      # .apk (not a zip) and installs directly. Each build is a new release, so
+      # every version has a unique app id and installs in parallel.
+      - name: Publish fusion.apk to Releases
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.apk
-          generate_release_notes: true
+          tag_name: build-${{ github.run_number }}
+          name: Fusion build ${{ github.run_number }}
+          body: |
+            Single, directly-installable **fusion.apk** (app id `com.fusion.firewall.v${{ github.run_number }}`).
+            Installs in parallel with any other Fusion build. Enable "install from unknown sources", then open the file.
+          files: dist/fusion.apk
+          prerelease: true
+          make_latest: true

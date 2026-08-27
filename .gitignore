@@ -14,7 +14,7 @@ captures/
 *.iml
 .DS_Store
 
-# Keystores (never commit signing material)
+# Keystores — never commit signing material; CI generates one at build time
 *.jks
 *.keystore
 keystore.properties

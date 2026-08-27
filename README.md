@@ -39,46 +39,49 @@ inspected on-device and dropped.
 
 You need the Android SDK. Two ways:
 
-### 1. GitHub Actions (produces the APK for you)
+### 1. GitHub Actions (produces the APK for you) — recommended
 
 Every push runs [`.github/workflows/android-build.yml`](.github/workflows/android-build.yml),
-which builds all slots and uploads them as a **`fusion-apks`** artifact
-(`fusion.apk`, `fusion-slotb.apk`, `fusion-slotc.apk`). Download it from the
-run's *Artifacts* section. Pushing a `v*` tag additionally publishes a GitHub
-Release with the APKs attached.
+which builds a single signed **`fusion.apk`** and publishes it as a **GitHub
+Release asset**. Go to the repo's **Releases** page and download `fusion.apk`
+directly (a real `.apk` file — not a zip). Enable "install from unknown
+sources" and open it on the phone.
+
+> Download the APK from **Releases**, not from the run's *Artifacts* — GitHub
+> always wraps artifacts in a `.zip`, and Android cannot install a zip. That is
+> the usual cause of "App couldn't be installed."
 
 ### 2. Locally
 
 ```bash
 # Android SDK required (ANDROID_HOME / sdkmanager). Then:
-./gradlew assembleDebug          # builds every slot
-# primary APK:
-#   app/build/outputs/apk/slotA/debug/app-slotA-debug.apk  -> install as fusion.apk
+./gradlew assembleRelease -PfusionBuildId=1
+cp app/build/outputs/apk/release/app-release.apk fusion.apk
+adb install -r fusion.apk        # or copy fusion.apk to the phone and open it
 ```
 
-Install: `adb install -r app/build/outputs/apk/slotA/debug/app-slotA-debug.apk`
-(or copy any built APK to the phone and open it to sideload).
-
-> The CI builds **debug-signed** APKs so they are directly installable. For a
-> Play/production build, add a signing config and run `assembleRelease`.
+CI generates a signing key at build time; a local `assembleRelease` with no
+`app/fusion.keystore` present falls back to the standard debug key, so the APK
+installs without extra steps either way.
 
 ---
 
-## Parallel & future versions (unique app IDs)
+## One APK, unique app ID, parallel & future installs
 
-The base application ID is `com.fusion.firewall`. Three **slots** each append a
-suffix and a distinct launcher label, so several Fusion builds coexist:
+There is a single output: **`fusion.apk`**. Its application ID is
+`com.fusion.firewall` plus a per-build suffix (`fusionBuildId`), e.g.
+`com.fusion.firewall.v42`. Because Android keys installs by application ID,
+**every build installs in parallel** with previous ones and never overwrites
+them — install today's `fusion.apk`, and a future `fusion.apk` (new build =
+new ID) installs alongside it. The launcher label carries the same id (e.g.
+"Fusion 42") so you can tell parallel installs apart.
 
-| Slot | Application ID | Label | Output |
-|---|---|---|---|
-| A (primary) | `com.fusion.firewall.slota` | Fusion | `fusion.apk` |
-| B | `com.fusion.firewall.slotb` | Fusion B | `fusion-slotb.apk` |
-| C | `com.fusion.firewall.slotc` | Fusion C | `fusion-slotc.apk` |
+- CI stamps the id from the run number: `-PfusionBuildId=${{ github.run_number }}`.
+- Locally, pass your own: `./gradlew assembleRelease -PfusionBuildId=7`
+  (omit it and a timestamp is used, still unique).
 
-Because Android keys installs by application ID, slot A / B / C install in
-parallel and never overwrite each other — handy for running a stable build
-alongside a test of a future version. Add more slots in
-[`app/build.gradle.kts`](app/build.gradle.kts) as needed.
+A committed, shared signing key means all these installs coexist cleanly, and a
+rebuild of the *same* id updates in place normally.
 
 ---
 
