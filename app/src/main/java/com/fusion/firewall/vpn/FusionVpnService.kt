@@ -2,7 +2,6 @@ package com.fusion.firewall.vpn
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
@@ -260,10 +259,9 @@ class FusionVpnService : VpnService() {
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {
-        val type = if (Build.VERSION.SDK_INT >= 34) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-        } else 0
-        ServiceCompat.startForeground(this, NOTIF_ID, notification, type)
+        // No foreground-service type: keeps the package parseable on Android 13
+        // and below while still running fine on Android 14 (targetSdk 33).
+        ServiceCompat.startForeground(this, NOTIF_ID, notification, 0)
     }
 
     private fun stopForegroundCompat() {

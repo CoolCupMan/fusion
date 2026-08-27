@@ -24,7 +24,10 @@ android {
         // APIs are guarded at runtime so the APK parses and installs on legacy
         // devices too.
         minSdk = 21
-        targetSdk = 34
+        // Target 33 (Android 13): avoids the API-34-only foreground-service-type
+        // manifest constructs that make Android 13-and-below reject the package.
+        // The app still installs and runs on Android 14.
+        targetSdk = 33
         versionCode = 1
         versionName = "1.0.$fusionBuildId"
 
