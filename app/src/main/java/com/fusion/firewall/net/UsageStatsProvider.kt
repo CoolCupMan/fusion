@@ -36,6 +36,7 @@ class UsageStatsProvider(private val context: Context) {
 
     /** Total mobile+wifi usage per uid since [since] (epoch millis). */
     fun usageSince(since: Long): Map<Int, AppUsage> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return emptyMap()
         if (!hasUsageAccess()) return emptyMap()
         val nsm = context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager
             ?: return emptyMap()

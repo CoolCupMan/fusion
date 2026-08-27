@@ -20,7 +20,10 @@ android {
         // Base id + a unique suffix -> e.g. com.fusion.firewall.v123456
         applicationId = "com.fusion.firewall"
         applicationIdSuffix = ".v$fusionBuildId"
-        minSdk = 26
+        // Wide compatibility: Android 5.0 (Lollipop) through Android 14. Newer
+        // APIs are guarded at runtime so the APK parses and installs on legacy
+        // devices too.
+        minSdk = 21
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.$fusionBuildId"
@@ -45,6 +48,10 @@ android {
                 keyAlias = (project.findProperty("fusionKeyAlias") as String?) ?: "fusion"
                 keyPassword = (project.findProperty("fusionKeyPassword") as String?) ?: "fusion123"
             }
+            // Sign with the legacy JAR scheme (v1) as well as v2/v3 so devices on
+            // Android 5–6 can verify the package (avoids "problem parsing").
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 

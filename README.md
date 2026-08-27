@@ -22,7 +22,7 @@ inspected on-device and dropped.
 | **Personal prompts for new apps** | The first time an unconfirmed app connects, Fusion raises a notification with **Allow** / **Block** actions. |
 | **BinaryCore intelligence** | A local offline engine scores each connection (known trackers, unusual ports, high-entropy/DGA domains, cleartext HTTP) and recommends allow/block. Optionally consult a remote BinaryCore API. Auto-apply and one-tap "triage all pending" are supported. |
 | **Per-app data usage** | Via `NetworkStatsManager` (needs Usage Access) the Apps screen shows 24 h data totals and sorts by heaviest talkers. |
-| **Legacy → upcoming compatibility** | `minSdk 26` (Android 8) through `targetSdk 34` (Android 14). Both IPv4 and IPv6 are governed. API-gated features (UID attribution, special-use FGS) degrade gracefully on older releases. |
+| **Legacy → upcoming compatibility** | `minSdk 21` (Android 5.0) through `targetSdk 34` (Android 14), signed with the v1+v2 schemes. Both IPv4 and IPv6 are governed. API-gated features (UID attribution, special-use FGS, notification channels, usage stats) degrade gracefully on older releases. |
 | **Parallel / future installs** | Product-flavor "slots" produce distinct application IDs so multiple Fusion builds can be installed side by side (see below). |
 
 ## Screens

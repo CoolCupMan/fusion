@@ -303,7 +303,11 @@ class FusionVpnService : VpnService() {
 
         fun start(context: Context) {
             val intent = Intent(context, FusionVpnService::class.java).setAction(ACTION_START)
-            context.startForegroundService(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
 
         fun stop(context: Context) {
