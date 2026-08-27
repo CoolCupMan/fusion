@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws the UI; this theme only styles the splash window. -->
+    <style name="Theme.Fusion" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/fusion_background</item>
+        <item name="android:statusBarColor">@color/fusion_background</item>
+        <item name="android:navigationBarColor">@color/fusion_background</item>
+    </style>
+</resources>

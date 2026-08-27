@@ -1,0 +1,55 @@
+name: Build Fusion APK
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Assemble debug APKs (all slots)
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Collect and rename APKs
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/slotA/debug/app-slotA-debug.apk dist/fusion.apk
+          cp app/build/outputs/apk/slotB/debug/app-slotB-debug.apk dist/fusion-slotb.apk
+          cp app/build/outputs/apk/slotC/debug/app-slotC-debug.apk dist/fusion-slotc.apk
+          ls -la dist
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fusion-apks
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Publish release on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: true
