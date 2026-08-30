@@ -174,6 +174,71 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearLog() = ConnectionLog.clear()
 
+    // --- Block lists / whitelist ---------------------------------------------
+    val blockLists: StateFlow<List<com.fusion.firewall.data.BlockListMeta>> =
+        container.blockLists.lists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val customBlocked: StateFlow<Set<String>> =
+        container.blockLists.custom.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+    val whitelist: StateFlow<Set<String>> =
+        container.blockLists.whitelist.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    private val _importStatus = MutableStateFlow<String?>(null)
+    val importStatus: StateFlow<String?> = _importStatus
+
+    /** Curated lists the user can import with one tap (downloaded on demand). */
+    val recommendedLists: List<Pair<String, String>> = listOf(
+        "StevenBlack ads + malware" to "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+        "Peter Lowe ad/tracking" to "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
+        "URLhaus malware" to "https://urlhaus.abuse.ch/downloads/hostfile/",
+        "AdGuard DNS filter" to "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
+    )
+
+    fun activeBlockedDomainCount(): Int = container.domainBlocker.blockedDomainCount
+
+    /** Block a single domain instantly (adds to the custom list). */
+    fun blockDomain(domain: String?) {
+        val d = domain?.trim().orEmpty()
+        if (d.isEmpty()) return
+        viewModelScope.launch { container.blockLists.addCustom(d) }
+    }
+
+    /** Unblock a domain: whitelist it (wins over any list) and drop any custom entry. */
+    fun unblockDomain(domain: String) = viewModelScope.launch {
+        container.blockLists.addWhitelist(domain)
+        container.blockLists.removeCustom(domain)
+    }
+
+    fun removeWhitelist(domain: String) = viewModelScope.launch { container.blockLists.removeWhitelist(domain) }
+    fun addWhitelist(domain: String) = viewModelScope.launch { container.blockLists.addWhitelist(domain.trim()) }
+    fun removeCustom(domain: String) = viewModelScope.launch { container.blockLists.removeCustom(domain) }
+    fun setListEnabled(id: String, enabled: Boolean) = viewModelScope.launch { container.blockLists.setEnabled(id, enabled) }
+    fun removeList(id: String) = viewModelScope.launch { container.blockLists.removeList(id) }
+
+    fun importFromUrl(name: String, url: String) = viewModelScope.launch {
+        _importStatus.value = "Downloading ${name.ifBlank { url }}…"
+        val result = withContext(Dispatchers.IO) {
+            runCatching { com.fusion.firewall.net.BlockListImporter.fromUrl(url) }
+        }
+        val domains = result.getOrNull()
+        when {
+            domains == null -> _importStatus.value = "Import failed: ${result.exceptionOrNull()?.message}"
+            domains.isEmpty() -> _importStatus.value = "No domains found in the list."
+            else -> {
+                container.blockLists.importList(name.ifBlank { url }, url, domains)
+                _importStatus.value = "Imported ${domains.size} domains."
+            }
+        }
+    }
+
+    fun importFromText(name: String, text: String) = viewModelScope.launch {
+        val domains = withContext(Dispatchers.IO) { com.fusion.firewall.net.BlockListImporter.parse(text) }
+        if (domains.isEmpty()) { _importStatus.value = "No valid domains found."; return@launch }
+        container.blockLists.importList(name.ifBlank { "Pasted list" }, "manual", domains)
+        _importStatus.value = "Imported ${domains.size} domains."
+    }
+
+    fun clearImportStatus() { _importStatus.value = null }
+
     /** How many apps would be blocked by [blockAllFlagged], given current data. */
     fun flaggedAppCount(): Int = flaggedAppPackages().size
 

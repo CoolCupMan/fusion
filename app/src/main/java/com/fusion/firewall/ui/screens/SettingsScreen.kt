@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.fusion.firewall.BuildConfig
+import com.fusion.firewall.data.AiMode
 import com.fusion.firewall.data.model.Policy
 import com.fusion.firewall.ui.FusionViewModel
 import com.fusion.firewall.ui.PolicySelector
@@ -67,6 +69,24 @@ fun SettingsScreen(
                 "app connects, with Allow/Block actions.",
             checked = settings.promptOnNewApps,
             onChange = { viewModel.setPromptOnNewApps(it) },
+        )
+
+        SectionHeader("BinaryCore engine")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AiMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = settings.aiMode == mode,
+                    onClick = { viewModel.setAiMode(mode) },
+                    label = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                )
+            }
+        }
+        ToggleRow(
+            title = "Auto-block from lists & AI",
+            subtitle = "Automatically block unconfirmed apps that hit the block list or a " +
+                "malicious/suspicious verdict. Set the default policy to \"Ask\" to observe them.",
+            checked = settings.aiAutoApply,
+            onChange = { viewModel.setAiAutoApply(it) },
         )
 
         SectionHeader("BinaryCore API")

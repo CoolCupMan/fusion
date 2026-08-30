@@ -3,6 +3,7 @@ package com.fusion.firewall.ui.screens
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,10 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.fusion.firewall.ai.Verdict
@@ -35,33 +39,35 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class Filter { ALL, UNCONFIRMED, MALICIOUS, SUSPICIOUS, TRACKER, BLOCKED }
+private enum class Filter { ALL, BLOCKED, ALLOWED, MALICIOUS, SUSPICIOUS }
 
 @Composable
 fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     val events by viewModel.events.collectAsState()
     val assessments by viewModel.assessments.collectAsState()
-    val intel by viewModel.intel.collectAsState()
-    val apps by viewModel.apps.collectAsState()
+    val stats by viewModel.stats.collectAsState()
     var filter by remember { mutableStateOf(Filter.ALL) }
 
-    val blockedPkgs = remember(apps) { apps.filter { it.policy == Policy.BLOCK }.map { it.packageName }.toSet() }
-    val pendingPkgs = remember(apps) { apps.filter { it.policy == Policy.PENDING }.map { it.packageName }.toSet() }
     val shown = when (filter) {
         Filter.ALL -> events
-        Filter.UNCONFIRMED -> events.filter { it.packageName in pendingPkgs }
+        Filter.BLOCKED -> events.filter { !it.allowed }
+        Filter.ALLOWED -> events.filter { it.allowed }
         Filter.MALICIOUS -> events.filter { assessments[it.id]?.verdict == Verdict.MALICIOUS }
         Filter.SUSPICIOUS -> events.filter { assessments[it.id]?.verdict == Verdict.SUSPICIOUS }
-        Filter.TRACKER -> events.filter { it.flagged }
-        Filter.BLOCKED -> events.filter { it.packageName in blockedPkgs }
     }
 
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Text(
-            "Live traffic",
+            "Live DNS traffic",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+        )
+        Text(
+            "Blocked ${stats.droppedConnections}  ·  Allowed ${stats.allowed}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            modifier = Modifier.padding(bottom = 8.dp),
         )
         Row(
             Modifier.horizontalScroll(rememberScrollState()),
@@ -80,11 +86,8 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
 
         if (shown.isEmpty()) {
             Text(
-                "Nothing here yet. Fusion shows the traffic of apps you BLOCK, and of " +
-                    "unconfirmed apps when the default policy is set to \"Ask\" (Settings). " +
-                    "Turn on protection, then block an app or switch the default to Ask — " +
-                    "each attempt appears here, auto-classified as safe, suspicious, tracker " +
-                    "or malicious.",
+                "No DNS lookups captured yet. Turn on protection — every app's domain " +
+                    "lookups appear here, and blocked ones are marked and counted.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.padding(top = 24.dp),
@@ -92,20 +95,16 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+                contentPadding = PaddingValues(vertical = 12.dp),
             ) {
                 items(shown, key = { it.timestamp.toString() + it.id }) { ev ->
-                    ConnectionRow(
+                    DnsRow(
                         event = ev,
                         assessedText = assessments[ev.id]?.let { it.verdict to it.confidence },
-                        assessmentReason = assessments[ev.id]?.reason,
-                        intel = intel[ev.remoteIp],
-                        onAssess = {
-                            viewModel.assess(ev)
-                            viewModel.lookupIntel(ev.remoteIp, ev.hostname)
-                        },
-                        onAllow = { ev.packageName?.let { viewModel.setPolicy(it, Policy.ALLOW) } },
-                        onBlock = { ev.packageName?.let { viewModel.setPolicy(it, Policy.BLOCK) } },
+                        onAssess = { viewModel.assess(ev) },
+                        onBlock = { viewModel.blockDomain(ev.hostname) },
+                        onUnblock = { ev.hostname?.let { viewModel.unblockDomain(it) } },
+                        onBlockApp = { ev.packageName?.let { viewModel.setPolicy(it, Policy.BLOCK) } },
                     )
                 }
             }
@@ -116,14 +115,13 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
 private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
 
 @Composable
-private fun ConnectionRow(
+private fun DnsRow(
     event: ConnectionEvent,
-    assessedText: Pair<com.fusion.firewall.ai.Verdict, Float>?,
-    assessmentReason: String?,
-    intel: com.fusion.firewall.data.model.IpIntel?,
+    assessedText: Pair<Verdict, Float>?,
     onAssess: () -> Unit,
-    onAllow: () -> Unit,
     onBlock: () -> Unit,
+    onUnblock: () -> Unit,
+    onBlockApp: () -> Unit,
 ) {
     Card {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -133,40 +131,48 @@ private fun ConnectionRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    event.appLabel ?: event.packageName ?: "Unknown",
+                    event.hostname ?: "(no name)",
                     fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
                 )
-                Text(timeFmt.format(Date(event.timestamp)), style = MaterialTheme.typography.labelSmall)
+                DroppedBadge(blocked = !event.allowed)
             }
             Text(
-                "${event.hostname ?: event.remoteIp}:${event.remotePort}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (event.flagged) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                "${event.transport} · local :${event.localPort}" +
-                    if (event.flagged) " · ${event.flagReason}" else "",
+                "${event.appLabel ?: event.packageName ?: "Unknown"} · ${timeFmt.format(Date(event.timestamp))}" +
+                    (event.flagReason?.let { " · $it" } ?: ""),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
             )
             if (assessedText != null) {
-                Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    VerdictBadge(assessedText.first, assessedText.second)
-                }
-                assessmentReason?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 2.dp))
-                }
+                Row(Modifier.padding(top = 6.dp)) { VerdictBadge(assessedText.first, assessedText.second) }
             }
-            IntelLine(intel)
             Row(
                 Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                AssistChip(onClick = onAssess, label = { Text("Ask BinaryCore") })
-                AssistChip(onClick = onAllow, label = { Text("Allow app") })
-                AssistChip(onClick = onBlock, label = { Text("Block app") })
+                AssistChip(onClick = onAssess, label = { Text("Ask AI") })
+                if (event.allowed) {
+                    AssistChip(onClick = onBlock, label = { Text("Block site") })
+                } else {
+                    AssistChip(onClick = onUnblock, label = { Text("Unblock") })
+                }
+                AssistChip(onClick = onBlockApp, label = { Text("Block app") })
             }
         }
+    }
+}
+
+@Composable
+private fun DroppedBadge(blocked: Boolean) {
+    val color = if (blocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    Surface(color = color.copy(alpha = 0.18f), shape = RoundedCornerShape(8.dp)) {
+        Text(
+            if (blocked) "BLOCKED" else "ALLOWED",
+            color = color,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+        )
     }
 }

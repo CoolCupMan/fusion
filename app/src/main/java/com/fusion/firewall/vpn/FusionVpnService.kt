@@ -11,39 +11,44 @@ import androidx.core.app.ServiceCompat
 import com.fusion.firewall.FusionApp
 import com.fusion.firewall.R
 import com.fusion.firewall.data.ConnectionLog
-import com.fusion.firewall.data.FusionSettings
 import com.fusion.firewall.data.model.ConnectionEvent
+import com.fusion.firewall.data.model.Direction
 import com.fusion.firewall.data.model.Policy
 import com.fusion.firewall.data.model.Transport
+import com.fusion.firewall.dns.DnsFilter
+import com.fusion.firewall.dns.Ipv4
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The heart of Fusion. A [VpnService] built as a reliable blocking firewall +
- * blocked-traffic monitor (no userspace TCP/IP stack required):
+ * Fusion's realtime engine, implemented as an on-device **DNS filter** (like
+ * Pi-hole): the VPN intercepts DNS only, so every app stays online, and each
+ * lookup is checked against the active block lists + whitelist. Blocked names are
+ * sinkholed (NXDOMAIN) instantly; everything else is forwarded to the real
+ * resolver. Per-app blocks sinkhole every lookup from that app.
  *
- *  - BLOCK   -> app is routed into the tunnel; each connection attempt is read
- *              for the live view + AI classification, then dropped (no network).
- *  - ALLOW / PENDING -> app is added as a disallowed application, so it bypasses
- *              the tunnel and keeps normal connectivity. (PENDING is captured
- *              instead only when "block pending" is enabled.)
- *
- * Because only blocked apps are routed, enabling Fusion never takes the phone
- * offline, and the live monitor shows exactly the traffic you chose to inspect.
+ * Only DNS is routed into the tunnel (the fake resolver 10.0.0.1), so no
+ * userspace TCP/IP stack is needed and normal traffic is untouched.
  */
 class FusionVpnService : VpnService() {
 
@@ -52,32 +57,26 @@ class FusionVpnService : VpnService() {
 
     @Volatile private var tunnel: ParcelFileDescriptor? = null
     @Volatile private var packetThread: Thread? = null
-    @Volatile private var reestablishJob: kotlinx.coroutines.Job? = null
+    @Volatile private var refreshJob: Job? = null
+    @Volatile private var upstreams: List<InetAddress> = defaultUpstreams()
 
-    @Volatile private var settings: FusionSettings = FusionSettings()
-    @Volatile private var rules: Map<String, Policy> = emptyMap()
-
-    // uid -> effective policy, rebuilt on each establish for the packet loop.
-    private val effectivePolicy = ConcurrentHashMap<Int, Policy>()
-    private val seenFlows = ConcurrentHashMap.newKeySet<String>()
-    private val promptedUids = ConcurrentHashMap.newKeySet<Int>()
+    private val seenAllowed = ConcurrentHashMap.newKeySet<String>()
 
     override fun onCreate() {
         super.onCreate()
         app = application as FusionApp
-        // Track config changes and re-establish the tunnel while running.
-        combine(app.container.repository.rules, app.container.repository.settings) { r, s -> r to s }
-            .onEach { (r, s) ->
-                rules = r
-                settings = s
-                // Debounce: rebuild the tunnel shortly after rules/settings settle
-                // (e.g. blocking several apps quickly) instead of on every keystroke.
+        // Rebuild the blocker whenever rules or any block list change (no tunnel
+        // rebuild needed — the filter reads the blocker live).
+        combine(
+            app.container.repository.rules,
+            app.container.blockLists.lists,
+            app.container.blockLists.custom,
+            app.container.blockLists.whitelist,
+        ) { _, _, _, _ -> Unit }
+            .onEach {
                 if (isRunning.value) {
-                    reestablishJob?.cancel()
-                    reestablishJob = scope.launch {
-                        kotlinx.coroutines.delay(350)
-                        establish()
-                    }
+                    refreshJob?.cancel()
+                    refreshJob = scope.launch { delay(250); refreshBlocker() }
                 }
             }
             .launchIn(scope)
@@ -86,17 +85,15 @@ class FusionVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                stopTunnel()
-                stopForegroundCompat()
-                stopSelf()
+                stopTunnel(); stopForegroundCompat(); stopSelf()
                 return START_NOT_STICKY
             }
             else -> {
                 startForegroundNotification()
                 scope.launch {
-                    rules = app.container.repository.rules.first()
-                    settings = app.container.repository.settings.first()
                     app.container.repository.setFirewallEnabled(true)
+                    refreshUpstreams()
+                    refreshBlocker()
                     establish()
                 }
             }
@@ -104,60 +101,47 @@ class FusionVpnService : VpnService() {
         return START_STICKY
     }
 
-    @Synchronized
-    private fun establish() {
+    private suspend fun refreshBlocker() {
+        val domains = app.container.blockLists.activeDomains()
+        val white = app.container.blockLists.whitelist.first()
+        val rules = app.container.repository.rules.first()
         val installed = app.container.appInfo.loadAll()
-        effectivePolicy.clear()
-        seenFlows.clear()
-        promptedUids.clear()
+        val blockedUids = installed.filter { rules[it.packageName] == Policy.BLOCK }.map { it.uid }.toSet()
+        app.container.domainBlocker.update(domains, white, blockedUids)
+    }
 
+    private fun refreshUpstreams() {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return
+        val servers = runCatching {
+            val net = cm.activeNetwork ?: return@runCatching emptyList<InetAddress>()
+            cm.getLinkProperties(net)?.dnsServers?.filterIsInstance<Inet4Address>() ?: emptyList()
+        }.getOrDefault(emptyList())
+        upstreams = (servers + defaultUpstreams()).distinct().ifEmpty { defaultUpstreams() }
+    }
+
+    private fun establish() {
         val builder = Builder()
             .setSession(getString(R.string.vpn_session))
             .setMtu(1500)
-            .addAddress("10.99.0.1", 32)
-            .addRoute("0.0.0.0", 0)
-            .addDisallowedApplication(packageName) // never capture ourselves
-
-        // IPv6 sink so v6-capable apps are governed too (ULA address).
-        runCatching {
-            builder.addAddress("fd00:2025:c0de::1", 64).addRoute("::", 0)
-        }
-
-        // Capture (route + monitor) any app whose effective policy is not ALLOW:
-        //  - BLOCK   -> dropped (no connectivity).
-        //  - PENDING -> unconfirmed: monitored in realtime and personally prompted
-        //               (this only happens when the default policy is "Ask", so
-        //               with the default "Allow" the phone is never taken offline).
-        // Everything else bypasses the tunnel and keeps normal connectivity.
-        for (info in installed) {
-            if (info.packageName == packageName) continue
-            val effective = effectiveFor(info.packageName)
-            effectivePolicy[info.uid] = effective
-            if (effective == Policy.ALLOW) {
-                runCatching { builder.addDisallowedApplication(info.packageName) }
-            }
-        }
+            .addAddress("10.0.0.2", 32)
+            .addDnsServer("10.0.0.1")
+            .addRoute("10.0.0.1", 32)
+        runCatching { builder.addDisallowedApplication(packageName) }
 
         val newTunnel = runCatching { builder.establish() }.getOrNull()
-        if (newTunnel == null) {
-            stopTunnel(); stopSelf(); return
-        }
+        if (newTunnel == null) { stopTunnel(); stopSelf(); return }
 
-        // Swap the descriptor; the old read loop unblocks and exits.
         val old = tunnel
         tunnel = newTunnel
         old?.let { runCatching { it.close() } }
         isRunning.value = true
-
+        seenAllowed.clear()
         startPacketLoop(newTunnel)
     }
 
-    private fun effectiveFor(pkg: String): Policy =
-        rules[pkg] ?: settings.defaultPolicy
-
     private fun startPacketLoop(fd: ParcelFileDescriptor) {
         packetThread?.interrupt()
-        val thread = Thread({ readLoop(fd) }, "fusion-packets")
+        val thread = Thread({ readLoop(fd) }, "fusion-dns")
         thread.isDaemon = true
         packetThread = thread
         thread.start()
@@ -165,126 +149,112 @@ class FusionVpnService : VpnService() {
 
     private fun readLoop(fd: ParcelFileDescriptor) {
         val input = FileInputStream(fd.fileDescriptor)
+        val output = FileOutputStream(fd.fileDescriptor)
         val buffer = ByteArray(32767)
         try {
             while (!Thread.currentThread().isInterrupted && tunnel === fd) {
                 val n = input.read(buffer)
-                if (n <= 0) {
-                    if (n < 0) break else continue
-                }
-                val packet = PacketParser.parse(buffer, n) ?: continue
-                handlePacket(buffer, packet)
-                // No write-back: captured packets are dropped (blocked).
+                if (n <= 0) { if (n < 0) break else continue }
+                runCatching { handleDns(buffer, n, output) }
             }
         } catch (_: Exception) {
-            // fd closed on re-establish/stop — normal.
+            // fd closed on stop — normal.
         } finally {
             runCatching { input.close() }
+            runCatching { output.close() }
         }
     }
 
-    private fun handlePacket(buffer: ByteArray, packet: ParsedPacket) {
-        if (packet.transport == Transport.ICMP || packet.transport == Transport.OTHER) return
-        if (packet.destPort == 0) return
+    private fun handleDns(buffer: ByteArray, n: Int, output: FileOutputStream) {
+        if (n < 28) return
+        if ((buffer[0].toInt() ushr 4) and 0xF != 4) return       // IPv4 only
+        if ((buffer[9].toInt() and 0xFF) != 17) return             // UDP
+        val ihl = (buffer[0].toInt() and 0x0F) * 4
+        if (n < ihl + 8) return
+        val dstPort = ((buffer[ihl + 2].toInt() and 0xFF) shl 8) or (buffer[ihl + 3].toInt() and 0xFF)
+        if (dstPort != 53) return
+        val srcPort = ((buffer[ihl].toInt() and 0xFF) shl 8) or (buffer[ihl + 1].toInt() and 0xFF)
 
-        val uid = resolveUid(packet)
-        val flowId = "$uid|${packet.destIp}|${packet.destPort}|${packet.transport}"
-        if (!seenFlows.add(flowId)) return // already surfaced this flow
-        if (seenFlows.size > 4000) seenFlows.clear()
+        val payloadOff = ihl + 8
+        val payload = buffer.copyOfRange(payloadOff, n)
+        val query = DnsFilter.parseQuery(payload, payload.size) ?: return
 
-        val info = if (uid > 0) app.container.appInfo.appForUid(uid) else null
-        val hostname = if (packet.transport == Transport.UDP && packet.destPort == 53) {
-            PacketParser.dnsQueryName(buffer, packet.payloadOffset, packet.length)
+        val srcIp = buffer.copyOfRange(12, 16)   // app (tun) address
+        val dnsIp = buffer.copyOfRange(16, 20)   // 10.0.0.1
+        val uid = resolveUid(srcIp, srcPort, dnsIp)
+
+        val blocked = app.container.domainBlocker.isBlocked(query.name, uid)
+        if (blocked) {
+            val resp = DnsFilter.buildNxdomain(payload, query.questionEnd)
+            runCatching { output.write(Ipv4.buildUdp(dnsIp, srcIp, 53, srcPort, resp)) }
+            record(uid, query.name, blocked = true)
         } else {
-            app.container.hosts.cached(packet.destIp)
+            val resp = forward(payload)
+            if (resp != null) {
+                runCatching { output.write(Ipv4.buildUdp(dnsIp, srcIp, 53, srcPort, resp)) }
+            }
+            if (seenAllowed.add("$uid|${query.name}")) {
+                if (seenAllowed.size > 3000) seenAllowed.clear()
+                record(uid, query.name, blocked = false)
+            }
         }
+    }
 
-        val flagged = app.container.hosts.isKnownTracker(hostname)
+    private fun forward(payload: ByteArray): ByteArray? {
+        for (server in upstreams) {
+            val sock = runCatching { DatagramSocket() }.getOrNull() ?: continue
+            try {
+                protect(sock)
+                sock.soTimeout = 3000
+                sock.send(DatagramPacket(payload, payload.size, server, 53))
+                val buf = ByteArray(4096)
+                val dp = DatagramPacket(buf, buf.size)
+                sock.receive(dp)
+                return buf.copyOf(dp.length)
+            } catch (_: Exception) {
+                // try next upstream
+            } finally {
+                runCatching { sock.close() }
+            }
+        }
+        return null
+    }
+
+    private fun resolveUid(srcIp: ByteArray, srcPort: Int, dnsIp: ByteArray): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return -1
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return -1
+        return runCatching {
+            val local = InetSocketAddress(InetAddress.getByAddress(srcIp), srcPort)
+            val remote = InetSocketAddress(InetAddress.getByAddress(dnsIp), 53)
+            cm.getConnectionOwnerUid(OsConstants.IPPROTO_UDP, local, remote)
+        }.getOrDefault(-1)
+    }
+
+    private fun record(uid: Int, domain: String, blocked: Boolean) {
+        val info = if (uid > 0) app.container.appInfo.appForUid(uid) else null
+        val byApp = blocked && app.container.domainBlocker.isBlockedUid(uid)
         val event = ConnectionEvent(
             timestamp = System.currentTimeMillis(),
             uid = uid,
             packageName = info?.packageName,
-            appLabel = info?.label ?: labelForUid(uid),
-            transport = packet.transport,
-            direction = packet.direction,
-            remoteIp = packet.destIp,
-            remotePort = packet.destPort,
-            localPort = packet.sourcePort,
-            hostname = hostname,
-            bytes = packet.length,
-            allowed = false,
-            flagged = flagged,
-            flagReason = if (flagged) "known tracker/telemetry" else null,
+            appLabel = info?.label ?: if (uid <= 0) "Unresolved" else "uid $uid",
+            transport = Transport.UDP,
+            direction = Direction.OUTBOUND,
+            remoteIp = "",
+            remotePort = 53,
+            localPort = 0,
+            hostname = domain,
+            bytes = domain.length,
+            allowed = !blocked,
+            flagged = blocked,
+            flagReason = if (byApp) "blocked app" else if (blocked) "block list" else null,
         )
         ConnectionLog.record(event)
-
-        maybePrompt(uid, info?.label, info?.packageName)
-        assessAsync(event, info?.system == true)
-    }
-
-    private fun resolveUid(packet: ParsedPacket): Int {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return -1
-        val cm = getSystemService(ConnectivityManager::class.java) ?: return -1
-        val proto = if (packet.transport == Transport.TCP) OsConstants.IPPROTO_TCP else OsConstants.IPPROTO_UDP
-        return runCatching {
-            val local = InetSocketAddress(InetAddress.getByName(packet.sourceIp), packet.sourcePort)
-            val remote = InetSocketAddress(InetAddress.getByName(packet.destIp), packet.destPort)
-            cm.getConnectionOwnerUid(proto, local, remote)
-        }.getOrDefault(-1)
-    }
-
-    private fun labelForUid(uid: Int): String = when {
-        uid <= 0 -> "Unresolved"
-        else -> "uid $uid"
-    }
-
-    private fun maybePrompt(uid: Int, label: String?, pkg: String?) {
-        if (!settings.promptOnNewApps || pkg == null) return
-        if (effectiveFor(pkg) != Policy.PENDING) return
-        if (!promptedUids.add(uid)) return
-        NotificationHelper.promptForApp(this, uid, label ?: pkg, pkg)
-    }
-
-    private fun assessAsync(event: ConnectionEvent, isSystem: Boolean) {
-        val pkg = event.packageName ?: return
-        scope.launch {
-            val ctx = com.fusion.firewall.ai.ConnectionContext(
-                appLabel = event.appLabel ?: pkg,
-                packageName = pkg,
-                isSystemApp = isSystem,
-                host = event.hostname,
-                ip = event.remoteIp,
-                port = event.remotePort,
-                transport = event.transport,
-            )
-            val assessment = app.container.binaryCore.assess(ctx, settings)
-            // Publish the verdict so the recommendation lists can categorize this
-            // connection as safe / suspicious / malicious without a manual tap.
-            ConnectionLog.recordAssessment(event.id, assessment)
-
-            // Auto-block from block lists + AI recommendations. Only apps the user
-            // has NOT explicitly decided on are auto-managed (manual rules win).
-            if (settings.aiAutoApply && !rules.containsKey(pkg)) {
-                val decision = when {
-                    event.flagged -> Policy.BLOCK                 // block-list hit
-                    else -> assessment.recommendedPolicy          // AI verdict
-                }
-                if (decision != Policy.PENDING) {
-                    app.container.repository.setPolicy(pkg, decision)
-                }
-            }
-        }
     }
 
     private fun startForegroundNotification() {
         NotificationHelper.ensureChannels(this)
-        startForegroundCompat(NotificationHelper.serviceNotification(this))
-    }
-
-    private fun startForegroundCompat(notification: android.app.Notification) {
-        // No foreground-service type: keeps the package parseable on Android 13
-        // and below while still running fine on Android 14 (targetSdk 33).
-        ServiceCompat.startForeground(this, NOTIF_ID, notification, 0)
+        ServiceCompat.startForeground(this, NOTIF_ID, NotificationHelper.serviceNotification(this), 0)
     }
 
     private fun stopForegroundCompat() {
@@ -301,16 +271,11 @@ class FusionVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        stopTunnel()
-        scope.cancel()
-        super.onDestroy()
+        stopTunnel(); scope.cancel(); super.onDestroy()
     }
 
     override fun onRevoke() {
-        stopTunnel()
-        stopForegroundCompat()
-        stopSelf()
-        super.onRevoke()
+        stopTunnel(); stopForegroundCompat(); stopSelf(); super.onRevoke()
     }
 
     companion object {
@@ -318,22 +283,25 @@ class FusionVpnService : VpnService() {
         const val ACTION_STOP = "com.fusion.firewall.STOP"
         private const val NOTIF_ID = 1001
 
-        /** Realtime running state observable by the UI. */
         val isRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)
         val running: StateFlow<Boolean> = isRunning.asStateFlow()
 
+        private fun defaultUpstreams(): List<InetAddress> = runCatching {
+            listOf(
+                InetAddress.getByName("1.1.1.1"),
+                InetAddress.getByName("8.8.8.8"),
+                InetAddress.getByName("9.9.9.9"),
+            )
+        }.getOrDefault(emptyList())
+
         fun start(context: Context) {
             val intent = Intent(context, FusionVpnService::class.java).setAction(ACTION_START)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
+            else context.startService(intent)
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, FusionVpnService::class.java).setAction(ACTION_STOP)
-            context.startService(intent)
+            context.startService(Intent(context, FusionVpnService::class.java).setAction(ACTION_STOP))
         }
     }
 }

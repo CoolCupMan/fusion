@@ -3,7 +3,7 @@ package com.fusion.firewall.ui
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Settings
@@ -20,10 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.fusion.firewall.ui.screens.AiScreen
 import com.fusion.firewall.ui.screens.AppsScreen
 import com.fusion.firewall.ui.screens.DashboardScreen
 import com.fusion.firewall.ui.screens.IntelScreen
+import com.fusion.firewall.ui.screens.ListsScreen
 import com.fusion.firewall.ui.screens.SettingsScreen
 import com.fusion.firewall.ui.screens.TrafficScreen
 
@@ -31,7 +31,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
     DASHBOARD("Dashboard", Icons.Filled.Dashboard),
     TRAFFIC("Traffic", Icons.Filled.Timeline),
     APPS("Apps", Icons.Filled.Apps),
-    AI("BinaryCore", Icons.Filled.AutoAwesome),
+    LISTS("Lists", Icons.Filled.Block),
     INTEL("Intel", Icons.Filled.Public),
     SETTINGS("Settings", Icons.Filled.Settings),
 }
@@ -63,7 +63,7 @@ fun FusionRoot(
             Tab.DASHBOARD -> DashboardScreen(viewModel, onToggleFirewall, content) { tab = Tab.TRAFFIC }
             Tab.TRAFFIC -> TrafficScreen(viewModel, content)
             Tab.APPS -> AppsScreen(viewModel, content)
-            Tab.AI -> AiScreen(viewModel, content)
+            Tab.LISTS -> ListsScreen(viewModel, content)
             Tab.INTEL -> IntelScreen(viewModel, content)
             Tab.SETTINGS -> SettingsScreen(viewModel, onOpenUsageAccessSettings, content)
         }
