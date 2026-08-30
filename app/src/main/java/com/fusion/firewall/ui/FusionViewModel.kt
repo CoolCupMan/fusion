@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.fusion.firewall.FusionApp
+import com.fusion.firewall.ai.AppThreat
 import com.fusion.firewall.ai.ConnectionContext
 import com.fusion.firewall.ai.ThreatAssessment
 import com.fusion.firewall.ai.Verdict
@@ -125,6 +126,16 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     private val _appReports = MutableStateFlow<Map<String, AppIntelReport>>(emptyMap())
     val appReports: StateFlow<Map<String, AppIntelReport>> = _appReports
 
+    // --- Installed-app threat analysis ---------------------------------------
+    private val _appThreats = MutableStateFlow<List<AppThreat>>(emptyList())
+    val appThreats: StateFlow<List<AppThreat>> = _appThreats
+
+    fun analyzeApps() = viewModelScope.launch(Dispatchers.IO) {
+        _appThreats.value = container.threatAnalyzer.analyze(events.value, installedApps.value, settings.value)
+    }
+
+    fun setAutoBlockDangerous(v: Boolean) = viewModelScope.launch { repo.setAutoBlockDangerous(v) }
+
     // --- Root / deep monitoring ----------------------------------------------
     private val _rootAvailable = MutableStateFlow<Boolean?>(null)
     val rootAvailable: StateFlow<Boolean?> = _rootAvailable
@@ -140,6 +151,7 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             while (true) {
                 refreshUsage()
+                analyzeApps()
                 delay(15_000)
             }
         }

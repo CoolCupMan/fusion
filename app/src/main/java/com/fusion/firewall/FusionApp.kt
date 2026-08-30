@@ -1,6 +1,7 @@
 package com.fusion.firewall
 
 import android.app.Application
+import com.fusion.firewall.ai.AppThreatAnalyzer
 import com.fusion.firewall.ai.BinaryCoreManager
 import com.fusion.firewall.data.BlockListRepository
 import com.fusion.firewall.data.RulesRepository
@@ -19,6 +20,7 @@ class AppContainer(app: Application) {
     val appInfo = AppInfoResolver(app.packageManager)
     val hosts = HostResolver()
     val binaryCore = BinaryCoreManager(hosts)
+    val threatAnalyzer = AppThreatAnalyzer(hosts, binaryCore)
     val usageStats = UsageStatsProvider(app)
     val ipIntel = IpIntelProvider(hosts)
     val root = RootMonitor()

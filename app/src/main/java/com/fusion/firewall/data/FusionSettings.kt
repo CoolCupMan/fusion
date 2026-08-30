@@ -29,6 +29,8 @@ data class FusionSettings(
     val onlineIntelEnabled: Boolean = false,
     /** Use su for deep, root-level monitoring when the device is already rooted. */
     val rootModeEnabled: Boolean = false,
+    /** Realtime monitoring auto-blocks apps whose traffic looks dangerous. */
+    val autoBlockDangerous: Boolean = false,
 )
 
 enum class AiMode {

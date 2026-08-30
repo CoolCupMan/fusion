@@ -5,7 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Icon
@@ -32,7 +32,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
     TRAFFIC("Traffic", Icons.Filled.Timeline),
     APPS("Apps", Icons.Filled.Apps),
     LISTS("Lists", Icons.Filled.Block),
-    INTEL("Intel", Icons.Filled.Public),
+    INTEL("Threats", Icons.Filled.Security),
     SETTINGS("Settings", Icons.Filled.Settings),
 }
 

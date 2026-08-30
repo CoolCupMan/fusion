@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.fusion.firewall.ai.AppThreat
 import com.fusion.firewall.ai.ThreatAssessment
 import com.fusion.firewall.ai.Verdict
 import com.fusion.firewall.data.model.AppRule
@@ -48,6 +49,7 @@ fun IntelScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     val services by viewModel.systemServices.collectAsState()
     val events by viewModel.events.collectAsState()
     val verdicts by viewModel.assessments.collectAsState()
+    val threats by viewModel.appThreats.collectAsState()
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -84,6 +86,8 @@ fun IntelScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                 )
             }
         }
+
+        AppThreatSection(threats, settings.autoBlockDangerous, viewModel)
 
         RecommendedActions(events, verdicts, viewModel)
 
@@ -228,6 +232,93 @@ private fun RootSection(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppThreatSection(
+    threats: List<AppThreat>,
+    autoBlock: Boolean,
+    viewModel: FusionViewModel,
+) {
+    SectionHeader("Dangerous app analysis")
+    Text(
+        "Fusion analyzes each app by the traffic it actually produces — trackers, " +
+            "telemetry and malicious endpoints — and flags the dangerous ones.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+    )
+    Card {
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Auto-block dangerous apps", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Realtime monitoring permanently blocks apps that contact many " +
+                        "trackers/malware domains.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                )
+            }
+            Switch(checked = autoBlock, onCheckedChange = { viewModel.setAutoBlockDangerous(it) })
+        }
+    }
+    OutlinedButton(onClick = { viewModel.analyzeApps() }, modifier = Modifier.fillMaxWidth()) {
+        Text("Re-analyze installed apps")
+    }
+
+    val flagged = threats.filter { it.verdict != Verdict.SAFE }
+    if (flagged.isEmpty()) {
+        Text(
+            "No dangerous apps detected yet. Turn on protection and let it run so Fusion " +
+                "can observe each app's traffic.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+    } else {
+        flagged.forEach { t -> ThreatCard(t, viewModel) }
+    }
+}
+
+@Composable
+private fun ThreatCard(t: AppThreat, viewModel: FusionViewModel) {
+    Card {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(t.label, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        t.packageName + if (t.system) " · system" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                VerdictBadge(t.verdict, t.score / 100f)
+            }
+            t.reasons.forEach {
+                Text("• $it", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 2.dp))
+            }
+            Text(
+                "${t.totalLookups} domains · ${t.blockedLookups} blocked",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AssistChip(onClick = { viewModel.setPolicy(t.packageName, Policy.BLOCK) }, label = { Text("Block app") })
+                AssistChip(onClick = { viewModel.setPolicy(t.packageName, Policy.ALLOW) }, label = { Text("Allow") })
             }
         }
     }

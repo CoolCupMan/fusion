@@ -11,6 +11,7 @@ import androidx.core.app.ServiceCompat
 import com.fusion.firewall.FusionApp
 import com.fusion.firewall.R
 import com.fusion.firewall.data.ConnectionLog
+import com.fusion.firewall.data.FusionSettings
 import com.fusion.firewall.data.model.ConnectionEvent
 import com.fusion.firewall.data.model.Direction
 import com.fusion.firewall.data.model.Policy
@@ -59,12 +60,22 @@ class FusionVpnService : VpnService() {
     @Volatile private var packetThread: Thread? = null
     @Volatile private var refreshJob: Job? = null
     @Volatile private var upstreams: List<InetAddress> = defaultUpstreams()
+    @Volatile private var settings: FusionSettings = FusionSettings()
+    @Volatile private var rules: Map<String, Policy> = emptyMap()
 
     private val seenAllowed = ConcurrentHashMap.newKeySet<String>()
+
+    // Realtime heuristic: distinct tracker domains seen per app uid, and uids
+    // we have already auto-blocked this session.
+    private val uidTrackers = ConcurrentHashMap<Int, MutableSet<String>>()
+    private val autoBlockedUids = ConcurrentHashMap.newKeySet<Int>()
+    private val dangerTrackerThreshold = 6
 
     override fun onCreate() {
         super.onCreate()
         app = application as FusionApp
+        app.container.repository.settings.onEach { settings = it }.launchIn(scope)
+        app.container.repository.rules.onEach { rules = it }.launchIn(scope)
         // Rebuild the blocker whenever rules or any block list change (no tunnel
         // rebuild needed — the filter reads the blocker live).
         combine(
@@ -232,6 +243,7 @@ class FusionVpnService : VpnService() {
 
     private fun record(uid: Int, domain: String, blocked: Boolean) {
         val info = if (uid > 0) app.container.appInfo.appForUid(uid) else null
+        maybeAutoBlockDangerous(uid, domain, info?.packageName)
         val byApp = blocked && app.container.domainBlocker.isBlockedUid(uid)
         val event = ConnectionEvent(
             timestamp = System.currentTimeMillis(),
@@ -250,6 +262,25 @@ class FusionVpnService : VpnService() {
             flagReason = if (byApp) "blocked app" else if (blocked) "block list" else null,
         )
         ConnectionLog.record(event)
+    }
+
+    /**
+     * Realtime heuristic auto-block: if an app contacts several distinct known
+     * tracker/telemetry domains and the user enabled auto-block, permanently
+     * block that app (sinkhole all its lookups). Manual ALLOW always wins, and
+     * each app is auto-blocked at most once per session.
+     */
+    private fun maybeAutoBlockDangerous(uid: Int, domain: String, pkg: String?) {
+        if (!settings.autoBlockDangerous || uid <= 0 || pkg == null) return
+        if (!app.container.hosts.isKnownTracker(domain)) return
+        if (rules[pkg] == Policy.ALLOW || rules[pkg] == Policy.BLOCK) return
+        val set = uidTrackers.getOrPut(uid) {
+            java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+        }
+        set.add(domain)
+        if (set.size >= dangerTrackerThreshold && autoBlockedUids.add(uid)) {
+            scope.launch { app.container.repository.setPolicy(pkg, Policy.BLOCK) }
+        }
     }
 
     private fun startForegroundNotification() {

@@ -36,6 +36,7 @@ class RulesRepository(private val context: Context) {
         val INTEL_KEY = stringPreferencesKey("intel_api_key")
         val ONLINE_INTEL = booleanPreferencesKey("online_intel")
         val ROOT_MODE = booleanPreferencesKey("root_mode")
+        val AUTO_BLOCK_DANGER = booleanPreferencesKey("auto_block_danger")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -59,6 +60,7 @@ class RulesRepository(private val context: Context) {
             ipIntelApiKey = prefs[Keys.INTEL_KEY] ?: "",
             onlineIntelEnabled = prefs[Keys.ONLINE_INTEL] ?: false,
             rootModeEnabled = prefs[Keys.ROOT_MODE] ?: false,
+            autoBlockDangerous = prefs[Keys.AUTO_BLOCK_DANGER] ?: false,
         )
     }
 
@@ -125,4 +127,7 @@ class RulesRepository(private val context: Context) {
 
     suspend fun setRootMode(value: Boolean) =
         context.dataStore.edit { it[Keys.ROOT_MODE] = value }
+
+    suspend fun setAutoBlockDangerous(value: Boolean) =
+        context.dataStore.edit { it[Keys.AUTO_BLOCK_DANGER] = value }
 }
