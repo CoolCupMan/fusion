@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -22,10 +23,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.fusion.firewall.ai.ThreatAssessment
+import com.fusion.firewall.ai.Verdict
 import com.fusion.firewall.data.model.AppRule
+import com.fusion.firewall.data.model.ConnectionEvent
 import com.fusion.firewall.data.model.IpIntel
+import com.fusion.firewall.data.model.Policy
 import com.fusion.firewall.ui.AppIntelReport
 import com.fusion.firewall.ui.DestinationIntel
 import com.fusion.firewall.ui.FusionViewModel
@@ -40,6 +46,8 @@ fun IntelScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     val rootAvailable by viewModel.rootAvailable.collectAsState()
     val rootConnections by viewModel.rootConnections.collectAsState()
     val services by viewModel.systemServices.collectAsState()
+    val events by viewModel.events.collectAsState()
+    val verdicts by viewModel.assessments.collectAsState()
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -76,6 +84,8 @@ fun IntelScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                 )
             }
         }
+
+        RecommendedActions(events, verdicts, viewModel)
 
         SectionHeader("Manually blocked apps (${blockedApps.size})")
         if (blockedApps.isEmpty()) {
@@ -219,6 +229,88 @@ private fun RootSection(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun RecommendedActions(
+    events: List<ConnectionEvent>,
+    verdicts: Map<String, ThreatAssessment>,
+    viewModel: FusionViewModel,
+) {
+    val malicious = events.filter { verdicts[it.id]?.verdict == Verdict.MALICIOUS }
+    val suspicious = events.filter { verdicts[it.id]?.verdict == Verdict.SUSPICIOUS }
+    val trackers = events.filter { it.flagged }
+
+    SectionHeader("Recommended actions")
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        CountPill("Malicious", malicious.size, MaterialTheme.colorScheme.error, Modifier.weight(1f))
+        CountPill("Suspicious", suspicious.size, Color(0xFFFFB020), Modifier.weight(1f))
+        CountPill("Trackers", trackers.size, MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+    }
+
+    val concerning = (malicious + suspicious + trackers).distinctBy { it.id }.take(15)
+    if (concerning.isEmpty()) {
+        Text(
+            "No suspicious, malicious or tracker traffic classified yet. Block an app in the " +
+                "Apps tab and let it run — Fusion auto-classifies every attempt it makes.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+    } else {
+        concerning.forEach { ev ->
+            val verdict = verdicts[ev.id]
+            Card {
+                Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(ev.appLabel ?: ev.packageName ?: "Unknown", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "${ev.hostname ?: ev.remoteIp}:${ev.remotePort} · ${ev.transport}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            )
+                        }
+                        verdict?.let { VerdictBadge(it.verdict, it.confidence) }
+                    }
+                    verdict?.reason?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AssistChip(
+                            onClick = {
+                                viewModel.assess(ev)
+                                viewModel.lookupIntel(ev.remoteIp, ev.hostname)
+                            },
+                            label = { Text("Ask AI") },
+                        )
+                        ev.packageName?.let { pkg ->
+                            AssistChip(
+                                onClick = { viewModel.setPolicy(pkg, Policy.BLOCK) },
+                                label = { Text("Block app") },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CountPill(label: String, count: Int, accent: Color, modifier: Modifier = Modifier) {
+    Card(modifier) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Text("$count", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = accent)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
         }
     }
 }

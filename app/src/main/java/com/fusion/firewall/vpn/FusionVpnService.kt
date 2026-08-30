@@ -33,18 +33,17 @@ import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The heart of Fusion. A [VpnService] that routes every app the user has *not*
- * permanently allowed into a local tunnel, observes each connection attempt in
- * realtime, and drops it — giving the user a live view of unconfirmed traffic
- * plus permanent per-app allow/block enforcement, all without root.
+ * The heart of Fusion. A [VpnService] built as a reliable blocking firewall +
+ * blocked-traffic monitor (no userspace TCP/IP stack required):
  *
- * Enforcement model (no userspace TCP/IP stack required):
- *  - ALLOW  -> app is added as a disallowed application, so it bypasses the
- *             tunnel and reaches the network normally.
- *  - BLOCK  -> app is routed into the tunnel; its packets are read for the live
- *             view and then dropped, so it has no connectivity.
- *  - PENDING-> handled by the global default; typically captured (blocked) and
- *             surfaced for a personal prompt until the user decides.
+ *  - BLOCK   -> app is routed into the tunnel; each connection attempt is read
+ *              for the live view + AI classification, then dropped (no network).
+ *  - ALLOW / PENDING -> app is added as a disallowed application, so it bypasses
+ *              the tunnel and keeps normal connectivity. (PENDING is captured
+ *              instead only when "block pending" is enabled.)
+ *
+ * Because only blocked apps are routed, enabling Fusion never takes the phone
+ * offline, and the live monitor shows exactly the traffic you chose to inspect.
  */
 class FusionVpnService : VpnService() {
 
@@ -53,6 +52,7 @@ class FusionVpnService : VpnService() {
 
     @Volatile private var tunnel: ParcelFileDescriptor? = null
     @Volatile private var packetThread: Thread? = null
+    @Volatile private var reestablishJob: kotlinx.coroutines.Job? = null
 
     @Volatile private var settings: FusionSettings = FusionSettings()
     @Volatile private var rules: Map<String, Policy> = emptyMap()
@@ -70,7 +70,15 @@ class FusionVpnService : VpnService() {
             .onEach { (r, s) ->
                 rules = r
                 settings = s
-                if (isRunning.value) establish()
+                // Debounce: rebuild the tunnel shortly after rules/settings settle
+                // (e.g. blocking several apps quickly) instead of on every keystroke.
+                if (isRunning.value) {
+                    reestablishJob?.cancel()
+                    reestablishJob = scope.launch {
+                        kotlinx.coroutines.delay(350)
+                        establish()
+                    }
+                }
             }
             .launchIn(scope)
     }
@@ -96,10 +104,12 @@ class FusionVpnService : VpnService() {
         return START_STICKY
     }
 
+    @Synchronized
     private fun establish() {
         val installed = app.container.appInfo.loadAll()
         effectivePolicy.clear()
         seenFlows.clear()
+        promptedUids.clear()
 
         val builder = Builder()
             .setSession(getString(R.string.vpn_session))
@@ -113,13 +123,17 @@ class FusionVpnService : VpnService() {
             builder.addAddress("fd00:2025:c0de::1", 64).addRoute("::", 0)
         }
 
+        // Only apps the user explicitly BLOCKED (or PENDING when block-pending is
+        // on) are routed into the tunnel and dropped. Everything else bypasses the
+        // tunnel and keeps normal connectivity, so enabling Fusion never takes the
+        // phone offline.
         for (info in installed) {
             if (info.packageName == packageName) continue
             val effective = effectiveFor(info.packageName)
             effectivePolicy[info.uid] = effective
-            val bypass = effective == Policy.ALLOW ||
-                (effective == Policy.PENDING && !settings.blockPendingByDefault)
-            if (bypass) {
+            val capture = effective == Policy.BLOCK ||
+                (effective == Policy.PENDING && settings.blockPendingByDefault)
+            if (!capture) {
                 runCatching { builder.addDisallowedApplication(info.packageName) }
             }
         }
@@ -244,6 +258,9 @@ class FusionVpnService : VpnService() {
                 transport = event.transport,
             )
             val assessment = app.container.binaryCore.assess(ctx, settings)
+            // Publish the verdict so the recommendation lists can categorize this
+            // connection as safe / suspicious / malicious without a manual tap.
+            ConnectionLog.recordAssessment(event.id, assessment)
             if (settings.aiAutoApply &&
                 assessment.recommendedPolicy != Policy.PENDING &&
                 effectiveFor(pkg) == Policy.PENDING

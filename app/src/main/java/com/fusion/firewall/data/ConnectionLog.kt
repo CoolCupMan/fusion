@@ -1,5 +1,6 @@
 package com.fusion.firewall.data
 
+import com.fusion.firewall.ai.ThreatAssessment
 import com.fusion.firewall.data.model.ConnectionEvent
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +35,14 @@ object ConnectionLog {
     private val _allowedCount = MutableStateFlow(0L)
     val allowedCount: StateFlow<Long> = _allowedCount.asStateFlow()
 
+    /** AI verdicts keyed by ConnectionEvent.id, filled by auto- and manual assessment. */
+    private val _verdicts = MutableStateFlow<Map<String, ThreatAssessment>>(emptyMap())
+    val verdicts: StateFlow<Map<String, ThreatAssessment>> = _verdicts.asStateFlow()
+
+    fun recordAssessment(eventId: String, assessment: ThreatAssessment) {
+        _verdicts.value = _verdicts.value + (eventId to assessment)
+    }
+
     fun record(event: ConnectionEvent) {
         buffer.addFirst(event)
         while (buffer.size > MAX_EVENTS) buffer.pollLast()
@@ -47,5 +56,6 @@ object ConnectionLog {
         _events.value = emptyList()
         _blockedCount.value = 0
         _allowedCount.value = 0
+        _verdicts.value = emptyMap()
     }
 }

@@ -168,16 +168,19 @@ Expected JSON response:
 Fusion does **not** ship a userspace TCP/IP stack. Instead it uses the VPN's
 per-app routing:
 
-- **Allowed** apps are added via `addDisallowedApplication`, so they bypass the
-  tunnel entirely and get full, unmodified connectivity. (They are therefore
-  not packet-inspected — their usage is shown via `NetworkStatsManager`.)
-- **Blocked** and **pending** apps are routed into the tunnel; their packets are
-  read for the live view and then dropped, which cleanly denies connectivity.
+- **Only BLOCKED apps are routed into the tunnel**, where each connection
+  attempt is read for the live view + AI classification and then dropped, which
+  cleanly denies connectivity.
+- **Everything else (allowed / pending) bypasses the tunnel** via
+  `addDisallowedApplication` and keeps full, unmodified connectivity. (Enabling
+  "block pending" instead captures pending apps too.)
 
-This is robust and battery-friendly, and it is exactly the traffic you care
-about visualizing: the *unconfirmed* flows. The trade-off is that Fusion shows
-attempted connections and DNS lookups for governed apps rather than full
-bidirectional payloads.
+So enabling Fusion **never takes the phone offline** — only the apps you block
+are cut off — and the live monitor shows exactly the blocked traffic you chose
+to inspect (attempted connections + DNS lookups, auto-classified as safe /
+suspicious / tracker / malicious). Allowed apps aren't packet-inspected; their
+usage is shown via `NetworkStatsManager`, and with root mode you can see every
+app's connections directly.
 
 Requires the user to grant VPN consent (system dialog) and, optionally, Usage
 Access and notification permission.

@@ -48,13 +48,13 @@ class RulesRepository(private val context: Context) {
     val settings: Flow<FusionSettings> = context.dataStore.data.map { prefs ->
         FusionSettings(
             firewallEnabled = prefs[Keys.FIREWALL_ENABLED] ?: false,
-            defaultPolicy = Policy.fromName(prefs[Keys.DEFAULT_POLICY]),
+            defaultPolicy = prefs[Keys.DEFAULT_POLICY]?.let { Policy.fromName(it) } ?: Policy.ALLOW,
             promptOnNewApps = prefs[Keys.PROMPT_NEW] ?: true,
             aiMode = AiMode.fromName(prefs[Keys.AI_MODE]),
             aiAutoApply = prefs[Keys.AI_AUTO] ?: false,
             binaryCoreEndpoint = prefs[Keys.BC_ENDPOINT] ?: "",
             binaryCoreApiKey = prefs[Keys.BC_KEY] ?: "",
-            blockPendingByDefault = prefs[Keys.BLOCK_PENDING] ?: true,
+            blockPendingByDefault = prefs[Keys.BLOCK_PENDING] ?: false,
             ipIntelEndpoint = prefs[Keys.INTEL_ENDPOINT] ?: "",
             ipIntelApiKey = prefs[Keys.INTEL_KEY] ?: "",
             onlineIntelEnabled = prefs[Keys.ONLINE_INTEL] ?: false,

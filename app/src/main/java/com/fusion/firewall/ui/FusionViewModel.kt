@@ -64,8 +64,9 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
 
     private val installedApps = MutableStateFlow<List<InstalledApp>>(emptyList())
     private val usage = MutableStateFlow<Map<Int, AppUsage>>(emptyMap())
-    private val _assessments = MutableStateFlow<Map<String, ThreatAssessment>>(emptyMap())
-    val assessments: StateFlow<Map<String, ThreatAssessment>> = _assessments
+
+    /** AI verdicts for connections (auto-classified by the service + manual asks). */
+    val assessments: StateFlow<Map<String, ThreatAssessment>> = ConnectionLog.verdicts
 
     val settings: StateFlow<FusionSettings> = repo.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FusionSettings())
@@ -264,7 +265,7 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
             transport = event.transport,
         )
         val result = container.binaryCore.assess(ctx, settings.value)
-        _assessments.value = _assessments.value + (event.id to result)
+        ConnectionLog.recordAssessment(event.id, result)
     }
 
     /** Apply BinaryCore's recommendation for every pending app at once. */
