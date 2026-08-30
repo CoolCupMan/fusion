@@ -123,17 +123,17 @@ class FusionVpnService : VpnService() {
             builder.addAddress("fd00:2025:c0de::1", 64).addRoute("::", 0)
         }
 
-        // Only apps the user explicitly BLOCKED (or PENDING when block-pending is
-        // on) are routed into the tunnel and dropped. Everything else bypasses the
-        // tunnel and keeps normal connectivity, so enabling Fusion never takes the
-        // phone offline.
+        // Capture (route + monitor) any app whose effective policy is not ALLOW:
+        //  - BLOCK   -> dropped (no connectivity).
+        //  - PENDING -> unconfirmed: monitored in realtime and personally prompted
+        //               (this only happens when the default policy is "Ask", so
+        //               with the default "Allow" the phone is never taken offline).
+        // Everything else bypasses the tunnel and keeps normal connectivity.
         for (info in installed) {
             if (info.packageName == packageName) continue
             val effective = effectiveFor(info.packageName)
             effectivePolicy[info.uid] = effective
-            val capture = effective == Policy.BLOCK ||
-                (effective == Policy.PENDING && settings.blockPendingByDefault)
-            if (!capture) {
+            if (effective == Policy.ALLOW) {
                 runCatching { builder.addDisallowedApplication(info.packageName) }
             }
         }

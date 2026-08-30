@@ -35,7 +35,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class Filter { ALL, MALICIOUS, SUSPICIOUS, TRACKER, BLOCKED }
+private enum class Filter { ALL, UNCONFIRMED, MALICIOUS, SUSPICIOUS, TRACKER, BLOCKED }
 
 @Composable
 fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
@@ -46,8 +46,10 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     var filter by remember { mutableStateOf(Filter.ALL) }
 
     val blockedPkgs = remember(apps) { apps.filter { it.policy == Policy.BLOCK }.map { it.packageName }.toSet() }
+    val pendingPkgs = remember(apps) { apps.filter { it.policy == Policy.PENDING }.map { it.packageName }.toSet() }
     val shown = when (filter) {
         Filter.ALL -> events
+        Filter.UNCONFIRMED -> events.filter { it.packageName in pendingPkgs }
         Filter.MALICIOUS -> events.filter { assessments[it.id]?.verdict == Verdict.MALICIOUS }
         Filter.SUSPICIOUS -> events.filter { assessments[it.id]?.verdict == Verdict.SUSPICIOUS }
         Filter.TRACKER -> events.filter { it.flagged }
@@ -78,9 +80,11 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
 
         if (shown.isEmpty()) {
             Text(
-                "Nothing here yet. Fusion monitors the apps you BLOCK: turn on protection, " +
-                    "block an app in the Apps tab, and its connection attempts appear here — " +
-                    "auto-classified as safe, suspicious, tracker or malicious.",
+                "Nothing here yet. Fusion shows the traffic of apps you BLOCK, and of " +
+                    "unconfirmed apps when the default policy is set to \"Ask\" (Settings). " +
+                    "Turn on protection, then block an app or switch the default to Ask — " +
+                    "each attempt appears here, auto-classified as safe, suspicious, tracker " +
+                    "or malicious.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.padding(top = 24.dp),

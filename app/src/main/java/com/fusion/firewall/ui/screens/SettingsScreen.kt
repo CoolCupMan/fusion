@@ -51,23 +51,22 @@ fun SettingsScreen(
 
         SectionHeader("Default for unconfirmed apps")
         Text(
-            "Applied to any app you have not personally decided on yet.",
+            "Applied to any app you have not personally decided on yet:\n" +
+                "• Allow — apps stay online; only apps you block are cut off (recommended).\n" +
+                "• Ask — hold unconfirmed apps' traffic, show it live, and prompt you to " +
+                "allow or block each one permanently.\n" +
+                "• Block — deny every app you have not explicitly allowed.",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
         )
         PolicySelector(current = settings.defaultPolicy, onSelect = { viewModel.setDefaultPolicy(it) })
 
         ToggleRow(
-            title = "Prompt on new apps",
-            subtitle = "Notify me the first time an unconfirmed app connects.",
+            title = "Personal prompts",
+            subtitle = "When the default is \"Ask\", notify me the first time an unconfirmed " +
+                "app connects, with Allow/Block actions.",
             checked = settings.promptOnNewApps,
             onChange = { viewModel.setPromptOnNewApps(it) },
-        )
-        ToggleRow(
-            title = "Block pending traffic",
-            subtitle = "Capture and drop traffic from apps awaiting a decision.",
-            checked = settings.blockPendingByDefault,
-            onChange = { viewModel.setBlockPending(it) },
         )
 
         SectionHeader("BinaryCore API")
