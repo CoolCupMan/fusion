@@ -261,11 +261,17 @@ class FusionVpnService : VpnService() {
             // Publish the verdict so the recommendation lists can categorize this
             // connection as safe / suspicious / malicious without a manual tap.
             ConnectionLog.recordAssessment(event.id, assessment)
-            if (settings.aiAutoApply &&
-                assessment.recommendedPolicy != Policy.PENDING &&
-                effectiveFor(pkg) == Policy.PENDING
-            ) {
-                app.container.repository.setPolicy(pkg, assessment.recommendedPolicy)
+
+            // Auto-block from block lists + AI recommendations. Only apps the user
+            // has NOT explicitly decided on are auto-managed (manual rules win).
+            if (settings.aiAutoApply && !rules.containsKey(pkg)) {
+                val decision = when {
+                    event.flagged -> Policy.BLOCK                 // block-list hit
+                    else -> assessment.recommendedPolicy          // AI verdict
+                }
+                if (decision != Policy.PENDING) {
+                    app.container.repository.setPolicy(pkg, decision)
+                }
             }
         }
     }

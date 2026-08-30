@@ -12,15 +12,32 @@ class HostResolver {
 
     private val ipToHost = ConcurrentHashMap<String, String>()
 
-    /** Known tracker / advertising / telemetry domain fragments (offline set). */
+    /** Known tracker / advertising / telemetry / malware domain fragments (offline block list). */
     private val trackerFragments = listOf(
-        "doubleclick", "googlesyndication", "google-analytics", "googleadservices",
-        "adservice", "adsystem", "admob", "app-measurement", "crashlytics",
+        // Ad networks & exchanges
+        "doubleclick", "googlesyndication", "googleadservices", "adservice",
+        "adsystem", "admob", "adcolony", "applovin", "vungle", "inmobi",
+        "mopub", "pubmatic", "rubiconproject", "openx", "adnxs", "adsrvr",
+        "smaato", "mgid", "revcontent", "propellerads", "popads", "adform",
+        "criteo", "taboola", "outbrain", "moatads", "smartadserver", "teads",
+        // Analytics & telemetry
+        "google-analytics", "googletagmanager", "app-measurement", "firebase",
+        "crashlytics", "amplitude", "mixpanel", "segment.io", "branch.io",
+        "adjust.com", "appsflyer", "flurry", "chartboost", "kochava", "singular",
+        "scorecardresearch", "quantserve", "comscore", "newrelic", "datadog",
+        "bugsnag", "sentry.io", "instabug", "umeng", "onesignal", "leanplum",
+        "clevertap", "braze", "airship", "swrve", "localytics", "heapanalytics",
+        "fullstory", "hotjar", "mouseflow", "clarity.ms", "yandex", "appcenter.ms",
+        // Social trackers / CDNs used for tracking
         "facebook.com/tr", "graph.facebook", "connect.facebook", "fbcdn",
-        "amplitude", "mixpanel", "segment.io", "branch.io", "adjust.com",
-        "appsflyer", "flurry", "chartboost", "unity3d.com", "unityads",
-        "scorecardresearch", "criteo", "taboola", "outbrain", "moatads",
-        "bugsnag", "sentry.io", "yandex", "mail.ru", "onesignal", "kochava",
+        "ads.tiktok", "analytics.tiktok", "business-api.tiktok", "mail.ru",
+        "vk.com", "hotwords", "sharethis", "addthis",
+        // Vendor telemetry
+        "metric.gstatic", "gvt2.com", "settings.crashlytics", "in.appcenter",
+        "self.events.data.microsoft", "vortex.data.microsoft", "watson.telemetry",
+        // Malware / C2 / suspicious hosting patterns (heuristic fragments)
+        "malware", "phishing", "botnet", "c2server", "cobaltstrike",
+        "duckdns.org", "no-ip.org", "ngrok.io", "serveo.net",
     )
 
     fun remember(ip: String, host: String) {

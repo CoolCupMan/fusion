@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.fusion.firewall.FusionApp
 import com.fusion.firewall.ai.ConnectionContext
 import com.fusion.firewall.ai.ThreatAssessment
+import com.fusion.firewall.ai.Verdict
 import com.fusion.firewall.data.AiMode
 import com.fusion.firewall.data.ConnectionLog
 import com.fusion.firewall.data.FusionSettings
@@ -172,6 +173,25 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     fun setRootMode(v: Boolean) = viewModelScope.launch { repo.setRootMode(v) }
 
     fun clearLog() = ConnectionLog.clear()
+
+    /** How many apps would be blocked by [blockAllFlagged], given current data. */
+    fun flaggedAppCount(): Int = flaggedAppPackages().size
+
+    private fun flaggedAppPackages(): Set<String> {
+        val verdicts = ConnectionLog.verdicts.value
+        return events.value.filter { ev ->
+            ev.flagged ||
+                verdicts[ev.id]?.recommendedPolicy == Policy.BLOCK ||
+                verdicts[ev.id]?.verdict == Verdict.MALICIOUS ||
+                verdicts[ev.id]?.verdict == Verdict.SUSPICIOUS
+        }.mapNotNull { it.packageName }.toSet()
+    }
+
+    /** Auto-block every app that hit the block list or a malicious/suspicious verdict. */
+    fun blockAllFlagged() = viewModelScope.launch {
+        val updates = flaggedAppPackages().associateWith { Policy.BLOCK }
+        if (updates.isNotEmpty()) repo.setPolicies(updates)
+    }
 
     /** Fetch geo/entity/ASN intelligence for a destination IP and cache it. */
     fun lookupIntel(ip: String, host: String?) = viewModelScope.launch {

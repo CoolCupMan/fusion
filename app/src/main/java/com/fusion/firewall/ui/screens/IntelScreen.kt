@@ -250,6 +250,18 @@ private fun RecommendedActions(
         CountPill("Trackers", trackers.size, MaterialTheme.colorScheme.primary, Modifier.weight(1f))
     }
 
+    val flaggedApps = (malicious + suspicious + trackers).mapNotNull { it.packageName }.distinct()
+    Button(
+        onClick = { viewModel.blockAllFlagged() },
+        enabled = flaggedApps.isNotEmpty(),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            if (flaggedApps.isEmpty()) "Nothing flagged to block"
+            else "Block all flagged apps (${flaggedApps.size})"
+        )
+    }
+
     val concerning = (malicious + suspicious + trackers).distinctBy { it.id }.take(15)
     if (concerning.isEmpty()) {
         Text(

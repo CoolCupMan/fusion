@@ -68,9 +68,11 @@ fun AiScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Auto-apply recommendations", fontWeight = FontWeight.SemiBold)
+                    Text("Auto-block from lists & AI", fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Let BinaryCore permanently allow/block pending apps automatically.",
+                        "Automatically block any unconfirmed app that hits the block list or a " +
+                            "malicious/suspicious verdict (and allow safe ones). Set the default " +
+                            "policy to \"Ask\" (Settings) so unconfirmed apps are observed.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                     )
