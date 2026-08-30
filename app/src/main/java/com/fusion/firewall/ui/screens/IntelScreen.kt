@@ -1,0 +1,250 @@
+package com.fusion.firewall.ui.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.fusion.firewall.data.model.AppRule
+import com.fusion.firewall.data.model.IpIntel
+import com.fusion.firewall.ui.AppIntelReport
+import com.fusion.firewall.ui.DestinationIntel
+import com.fusion.firewall.ui.FusionViewModel
+import com.fusion.firewall.ui.SectionHeader
+import com.fusion.firewall.ui.VerdictBadge
+
+@Composable
+fun IntelScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
+    val blockedApps by viewModel.blockedApps.collectAsState()
+    val reports by viewModel.appReports.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val rootAvailable by viewModel.rootAvailable.collectAsState()
+    val rootConnections by viewModel.rootConnections.collectAsState()
+    val services by viewModel.systemServices.collectAsState()
+
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text("Intelligence", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(
+            "Ask AI about the apps you blocked, and see where their traffic goes — " +
+                "vendor, network route, and approximate (IP-based) location.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+
+        // Online enrichment toggle
+        Card {
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Online intelligence", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (settings.ipIntelEndpoint.isBlank())
+                            "Set an endpoint in Settings to fetch geo/entity/ASN data."
+                        else "Sends destination IPs to your endpoint for enrichment.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    )
+                }
+                Switch(
+                    checked = settings.onlineIntelEnabled,
+                    onCheckedChange = { viewModel.setOnlineIntel(it) },
+                )
+            }
+        }
+
+        SectionHeader("Manually blocked apps (${blockedApps.size})")
+        if (blockedApps.isEmpty()) {
+            Text(
+                "Block an app in the Apps tab, then ask AI about it here.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        } else {
+            blockedApps.forEach { app ->
+                BlockedAppCard(app, reports[app.packageName], onAsk = { viewModel.askAiAboutApp(app) })
+            }
+        }
+
+        RootSection(rootAvailable, rootConnections.size, services.size,
+            rootConnections, viewModel)
+    }
+}
+
+@Composable
+private fun BlockedAppCard(
+    app: AppRule,
+    report: AppIntelReport?,
+    onAsk: () -> Unit,
+) {
+    Card {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(app.label, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        app.packageName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                if (report?.loading == true) {
+                    CircularProgressIndicator(Modifier.padding(start = 8.dp), strokeWidth = 2.dp)
+                } else {
+                    OutlinedButton(onClick = onAsk) { Text("Ask AI") }
+                }
+            }
+            if (report != null && !report.loading) {
+                Divider(Modifier.padding(vertical = 10.dp))
+                Text(report.summary, style = MaterialTheme.typography.bodyMedium)
+                report.destinations.forEach { d -> DestinationRow(d) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DestinationRow(d: DestinationIntel) {
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "${d.hostname ?: d.ip}:${d.port}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            d.assessment?.let { VerdictBadge(it.verdict, it.confidence) }
+        }
+        Text(
+            "${d.transport} · ${d.ip}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+        IntelLine(d.intel)
+    }
+}
+
+@Composable
+private fun RootSection(
+    rootAvailable: Boolean?,
+    connCount: Int,
+    serviceCount: Int,
+    connections: List<com.fusion.firewall.root.RootConnection>,
+    viewModel: FusionViewModel,
+) {
+    SectionHeader("Root / deep monitoring")
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            when (rootAvailable) {
+                null -> {
+                    Text(
+                        "Deep monitoring reads the kernel connection table, processes and " +
+                            "system services directly — but only if this device is already " +
+                            "rooted (Magisk/su). Fusion cannot root or flash the phone itself.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = { viewModel.refreshRoot() }, modifier = Modifier.padding(top = 10.dp)) {
+                        Text("Check for root access")
+                    }
+                }
+                false -> {
+                    Text("Root not available.", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text(
+                        "This device is not rooted, so system-daemon-level monitoring is not " +
+                            "possible from within an app. Rooting or flashing firmware is a " +
+                            "separate, at-your-own-risk process done from a PC — Fusion does not " +
+                            "and cannot perform it. VPN monitoring still works without root.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    OutlinedButton(onClick = { viewModel.refreshRoot() }, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Re-check")
+                    }
+                }
+                true -> {
+                    Text("Root available", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "$connCount live connections · $serviceCount services/processes",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Button(onClick = { viewModel.refreshRoot() }, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Refresh deep snapshot")
+                    }
+                    connections.take(30).forEach { c ->
+                        Divider(Modifier.padding(vertical = 6.dp))
+                        Text(
+                            "${viewModel.appLabelForUid(c.uid)}  ·  uid ${c.uid}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "${c.protocol}  ${c.remoteAddress}:${c.remotePort}  ${c.state}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Compact one-line intel view used inside a blocked-app report. */
+@Composable
+fun IntelLine(intel: IpIntel?) {
+    if (intel == null) return
+    val parts = buildList {
+        intel.locationLine()?.let { add(it) }
+        intel.org?.let { add(it) }
+        intel.asn?.let { add(it) }
+        if (intel.isHosting) add("datacenter")
+    }
+    if (parts.isNotEmpty()) {
+        Text(
+            parts.joinToString(" · "),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.secondary,
+        )
+    }
+    intel.coordsLine()?.let {
+        Text(
+            "≈ $it (IP-based, approximate)",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+        )
+    }
+}

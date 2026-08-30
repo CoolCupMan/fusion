@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Icon
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.fusion.firewall.ui.screens.AiScreen
 import com.fusion.firewall.ui.screens.AppsScreen
 import com.fusion.firewall.ui.screens.DashboardScreen
+import com.fusion.firewall.ui.screens.IntelScreen
 import com.fusion.firewall.ui.screens.SettingsScreen
 import com.fusion.firewall.ui.screens.TrafficScreen
 
@@ -30,6 +32,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
     TRAFFIC("Traffic", Icons.Filled.Timeline),
     APPS("Apps", Icons.Filled.Apps),
     AI("BinaryCore", Icons.Filled.AutoAwesome),
+    INTEL("Intel", Icons.Filled.Public),
     SETTINGS("Settings", Icons.Filled.Settings),
 }
 
@@ -61,6 +64,7 @@ fun FusionRoot(
             Tab.TRAFFIC -> TrafficScreen(viewModel, content)
             Tab.APPS -> AppsScreen(viewModel, content)
             Tab.AI -> AiScreen(viewModel, content)
+            Tab.INTEL -> IntelScreen(viewModel, content)
             Tab.SETTINGS -> SettingsScreen(viewModel, onOpenUsageAccessSettings, content)
         }
     }

@@ -32,6 +32,10 @@ class RulesRepository(private val context: Context) {
         val BC_ENDPOINT = stringPreferencesKey("bc_endpoint")
         val BC_KEY = stringPreferencesKey("bc_api_key")
         val BLOCK_PENDING = booleanPreferencesKey("block_pending")
+        val INTEL_ENDPOINT = stringPreferencesKey("intel_endpoint")
+        val INTEL_KEY = stringPreferencesKey("intel_api_key")
+        val ONLINE_INTEL = booleanPreferencesKey("online_intel")
+        val ROOT_MODE = booleanPreferencesKey("root_mode")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -51,6 +55,10 @@ class RulesRepository(private val context: Context) {
             binaryCoreEndpoint = prefs[Keys.BC_ENDPOINT] ?: "",
             binaryCoreApiKey = prefs[Keys.BC_KEY] ?: "",
             blockPendingByDefault = prefs[Keys.BLOCK_PENDING] ?: true,
+            ipIntelEndpoint = prefs[Keys.INTEL_ENDPOINT] ?: "",
+            ipIntelApiKey = prefs[Keys.INTEL_KEY] ?: "",
+            onlineIntelEnabled = prefs[Keys.ONLINE_INTEL] ?: false,
+            rootModeEnabled = prefs[Keys.ROOT_MODE] ?: false,
         )
     }
 
@@ -105,4 +113,16 @@ class RulesRepository(private val context: Context) {
 
     suspend fun setBlockPending(value: Boolean) =
         context.dataStore.edit { it[Keys.BLOCK_PENDING] = value }
+
+    suspend fun setIpIntelEndpoint(value: String) =
+        context.dataStore.edit { it[Keys.INTEL_ENDPOINT] = value }
+
+    suspend fun setIpIntelApiKey(value: String) =
+        context.dataStore.edit { it[Keys.INTEL_KEY] = value }
+
+    suspend fun setOnlineIntel(value: Boolean) =
+        context.dataStore.edit { it[Keys.ONLINE_INTEL] = value }
+
+    suspend fun setRootMode(value: Boolean) =
+        context.dataStore.edit { it[Keys.ROOT_MODE] = value }
 }

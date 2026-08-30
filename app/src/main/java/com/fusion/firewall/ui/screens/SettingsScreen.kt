@@ -40,6 +40,8 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsState()
     var endpoint by remember(settings.binaryCoreEndpoint) { mutableStateOf(settings.binaryCoreEndpoint) }
     var apiKey by remember(settings.binaryCoreApiKey) { mutableStateOf(settings.binaryCoreApiKey) }
+    var intelEndpoint by remember(settings.ipIntelEndpoint) { mutableStateOf(settings.ipIntelEndpoint) }
+    var intelKey by remember(settings.ipIntelApiKey) { mutableStateOf(settings.ipIntelApiKey) }
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -84,6 +86,45 @@ fun SettingsScreen(
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
+        )
+
+        SectionHeader("Connection intelligence")
+        Text(
+            "Endpoint that maps an IP to geo/entity/ASN data (ipinfo-style JSON). " +
+                "Used to show where blocked apps' traffic goes. Location is approximate.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        )
+        OutlinedTextField(
+            value = intelEndpoint,
+            onValueChange = { intelEndpoint = it; viewModel.setIpIntelEndpoint(it) },
+            label = { Text("IP intelligence endpoint") },
+            placeholder = { Text("https://…/{ip}") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = intelKey,
+            onValueChange = { intelKey = it; viewModel.setIpIntelApiKey(it) },
+            label = { Text("Intelligence API key") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        ToggleRow(
+            title = "Enable online lookups",
+            subtitle = "Sends destination IPs to the endpoint above for enrichment.",
+            checked = settings.onlineIntelEnabled,
+            onChange = { viewModel.setOnlineIntel(it) },
+        )
+
+        SectionHeader("Deep monitoring (root)")
+        ToggleRow(
+            title = "Root mode",
+            subtitle = "If this device is already rooted, read the kernel connection table, " +
+                "processes and services directly. Fusion never roots or flashes the device.",
+            checked = settings.rootModeEnabled,
+            onChange = { viewModel.setRootMode(it) },
         )
 
         SectionHeader("Permissions")

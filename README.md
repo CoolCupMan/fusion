@@ -131,6 +131,38 @@ Expected JSON response:
 
 ---
 
+## Deep intelligence & root mode
+
+- **Dashboard reflects blocks instantly.** Blocking an app in the Apps tab
+  updates the dashboard's "Blocked apps" count and list immediately — no VPN or
+  live monitoring required.
+- **Connection intelligence (Intel tab).** For a destination, Fusion shows
+  reverse DNS, hosting/datacenter classification, and — when you enable online
+  lookups and set an endpoint — geolocation, owning entity/vendor, and ASN/route.
+  IP geolocation is **approximate** (city-level, the server's location) and is
+  never a person's GPS position.
+- **Ask AI about blocked apps.** The Intel tab lists every app you blocked; tap
+  *Ask AI* to gather the endpoints it contacted (from live history and, with
+  root, the kernel table), enrich each with intel + a BinaryCore verdict, and
+  summarize.
+- **Root mode (optional, read-only).** If the device is **already rooted**
+  (Magisk/su), Fusion reads `/proc/net/*`, processes and `service list` directly
+  for system-wide, VPN-free monitoring. **Fusion cannot root or flash the
+  device** — rooting/flashing firmware is a separate, at-your-own-risk process
+  done from a PC (Ulefone uses MediaTek SP Flash Tool, not Samsung Odin, and
+  phones have no "BIOS"). Without root, VPN monitoring still works.
+
+### IP intelligence API contract
+
+`GET <endpoint>/<ip>` (or put `{ip}` in the URL) with optional
+`Authorization: Bearer <key>`, returning ipinfo-style JSON:
+
+```json
+{ "ip": "203.0.113.5", "hostname": "host.example.com", "city": "Frankfurt",
+  "region": "Hesse", "country": "DE", "loc": "50.1109,8.6821",
+  "org": "AS64500 Example Hosting", "asn": "AS64500" }
+```
+
 ## How enforcement works (and its limits)
 
 Fusion does **not** ship a userspace TCP/IP stack. Instead it uses the VPN's

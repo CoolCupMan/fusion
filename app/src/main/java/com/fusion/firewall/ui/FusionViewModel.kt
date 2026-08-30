@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,10 +29,32 @@ import kotlinx.coroutines.withContext
 /** Aggregated, immutable state the whole UI renders from. */
 data class DashboardStats(
     val running: Boolean,
-    val blocked: Long,
+    /** Count of apps permanently blocked (updates instantly from the Apps tab). */
+    val blockedApps: Int,
+    /** Dropped connection attempts seen while monitoring. */
+    val droppedConnections: Long,
     val allowed: Long,
     val pendingApps: Int,
     val flaggedNow: Int,
+)
+
+/** A destination an app contacted, enriched with intel and an AI verdict. */
+data class DestinationIntel(
+    val ip: String,
+    val hostname: String?,
+    val port: Int,
+    val transport: String,
+    val intel: com.fusion.firewall.data.model.IpIntel?,
+    val assessment: ThreatAssessment?,
+)
+
+/** The result of "ask AI about this blocked app". */
+data class AppIntelReport(
+    val packageName: String,
+    val label: String,
+    val destinations: List<DestinationIntel>,
+    val summary: String,
+    val loading: Boolean = false,
 )
 
 class FusionViewModel(app: Application) : AndroidViewModel(app) {
@@ -77,15 +100,36 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         ) { run, blocked, allowed, appList, ev ->
             DashboardStats(
                 running = run,
-                blocked = blocked,
+                blockedApps = appList.count { it.policy == Policy.BLOCK },
+                droppedConnections = blocked,
                 allowed = allowed,
                 pendingApps = appList.count { it.policy == Policy.PENDING },
                 flaggedNow = ev.count { it.flagged },
             )
         }.stateIn(
             viewModelScope, SharingStarted.WhileSubscribed(5000),
-            DashboardStats(false, 0, 0, 0, 0)
+            DashboardStats(false, 0, 0L, 0L, 0, 0)
         )
+
+    /** Apps the user has permanently blocked (for the dashboard and Intel tab). */
+    val blockedApps: StateFlow<List<AppRule>> =
+        apps.map { list -> list.filter { it.policy == Policy.BLOCK } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- Connection intelligence ---------------------------------------------
+    private val _intel = MutableStateFlow<Map<String, com.fusion.firewall.data.model.IpIntel>>(emptyMap())
+    val intel: StateFlow<Map<String, com.fusion.firewall.data.model.IpIntel>> = _intel
+
+    private val _appReports = MutableStateFlow<Map<String, AppIntelReport>>(emptyMap())
+    val appReports: StateFlow<Map<String, AppIntelReport>> = _appReports
+
+    // --- Root / deep monitoring ----------------------------------------------
+    private val _rootAvailable = MutableStateFlow<Boolean?>(null)
+    val rootAvailable: StateFlow<Boolean?> = _rootAvailable
+    private val _rootConnections = MutableStateFlow<List<com.fusion.firewall.root.RootConnection>>(emptyList())
+    val rootConnections: StateFlow<List<com.fusion.firewall.root.RootConnection>> = _rootConnections
+    private val _systemServices = MutableStateFlow<List<String>>(emptyList())
+    val systemServices: StateFlow<List<String>> = _systemServices
 
     val usageAccessGranted: Boolean get() = container.usageStats.hasUsageAccess()
 
@@ -121,8 +165,91 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     fun setAiAutoApply(v: Boolean) = viewModelScope.launch { repo.setAiAutoApply(v) }
     fun setEndpoint(v: String) = viewModelScope.launch { repo.setBinaryCoreEndpoint(v) }
     fun setApiKey(v: String) = viewModelScope.launch { repo.setBinaryCoreApiKey(v) }
+    fun setIpIntelEndpoint(v: String) = viewModelScope.launch { repo.setIpIntelEndpoint(v) }
+    fun setIpIntelApiKey(v: String) = viewModelScope.launch { repo.setIpIntelApiKey(v) }
+    fun setOnlineIntel(v: Boolean) = viewModelScope.launch { repo.setOnlineIntel(v) }
+    fun setRootMode(v: Boolean) = viewModelScope.launch { repo.setRootMode(v) }
 
     fun clearLog() = ConnectionLog.clear()
+
+    /** Fetch geo/entity/ASN intelligence for a destination IP and cache it. */
+    fun lookupIntel(ip: String, host: String?) = viewModelScope.launch {
+        if (_intel.value.containsKey(ip)) return@launch
+        val result = container.ipIntel.lookup(ip, host, settings.value)
+        _intel.value = _intel.value + (ip to result)
+    }
+
+    /**
+     * "Ask AI about this blocked app": gather every destination it has contacted
+     * (from live history and, if available, the root connection table), enrich
+     * each with intel + a BinaryCore verdict, and summarize.
+     */
+    fun askAiAboutApp(app: AppRule) = viewModelScope.launch(Dispatchers.IO) {
+        _appReports.value = _appReports.value +
+            (app.packageName to AppIntelReport(app.packageName, app.label, emptyList(), "Analyzing…", loading = true))
+
+        val current = settings.value
+        // Destinations from observed traffic.
+        val fromEvents = events.value.filter { it.packageName == app.packageName }
+            .map { Triple(it.remoteIp, it.hostname, it.remotePort) to it.transport.name }
+        // Destinations from the kernel table (root), matched by uid.
+        val fromRoot = _rootConnections.value.filter { it.uid == app.uid }
+            .map { Triple(it.remoteAddress, null as String?, it.remotePort) to it.protocol.uppercase() }
+        val distinct = (fromEvents + fromRoot).distinctBy { it.first }.take(25)
+
+        val destinations = distinct.map { (key, proto) ->
+            val (ip, host, port) = key
+            val intel = runCatching { container.ipIntel.lookup(ip, host, current) }.getOrNull()
+            val assessment = runCatching {
+                container.binaryCore.assess(
+                    ConnectionContext(
+                        appLabel = app.label,
+                        packageName = app.packageName,
+                        isSystemApp = app.system,
+                        host = intel?.hostname ?: host,
+                        ip = ip,
+                        port = port,
+                        transport = com.fusion.firewall.data.model.Transport.entries
+                            .firstOrNull { it.name == proto } ?: com.fusion.firewall.data.model.Transport.TCP,
+                    ),
+                    current,
+                )
+            }.getOrNull()
+            DestinationIntel(ip, intel?.hostname ?: host, port, proto, intel, assessment)
+        }
+
+        val risky = destinations.count {
+            it.assessment?.recommendedPolicy == Policy.BLOCK
+        }
+        val countries = destinations.mapNotNull { it.intel?.country }.distinct()
+        val vendors = destinations.mapNotNull { it.intel?.org }.distinct().take(4)
+        val summary = when {
+            destinations.isEmpty() ->
+                "No destinations observed yet for ${app.label}. Enable monitoring or root mode, " +
+                    "then let it run so Fusion can attribute its connections."
+            else -> buildString {
+                append("${app.label} contacted ${destinations.size} distinct endpoint(s). ")
+                if (risky > 0) append("$risky look risky (BinaryCore recommends blocking). ")
+                if (vendors.isNotEmpty()) append("Vendors: ${vendors.joinToString(", ")}. ")
+                if (countries.isNotEmpty()) append("Regions: ${countries.joinToString(", ")}.")
+            }
+        }
+        _appReports.value = _appReports.value +
+            (app.packageName to AppIntelReport(app.packageName, app.label, destinations, summary))
+    }
+
+    // --- Root / deep monitoring ----------------------------------------------
+    fun refreshRoot() = viewModelScope.launch(Dispatchers.IO) {
+        val available = container.root.isRootAvailable()
+        _rootAvailable.value = available
+        if (available) {
+            _rootConnections.value = container.root.connections()
+            _systemServices.value = container.root.services()
+        }
+    }
+
+    fun appLabelForUid(uid: Int): String =
+        container.appInfo.appForUid(uid)?.label ?: "uid $uid"
 
     /** Ask BinaryCore about a live connection and cache the verdict for the UI. */
     fun assess(event: ConnectionEvent) = viewModelScope.launch {

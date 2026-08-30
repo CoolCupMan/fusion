@@ -18,6 +18,13 @@ data class FusionSettings(
     val binaryCoreApiKey: String = "",
     /** Also block traffic for apps that are currently PENDING. */
     val blockPendingByDefault: Boolean = true,
+    /** Endpoint for IP intelligence (geo/entity/ASN) enrichment; ipinfo-style JSON. */
+    val ipIntelEndpoint: String = "",
+    val ipIntelApiKey: String = "",
+    /** Allow online lookups for connection intelligence (sends dest IPs to the endpoint). */
+    val onlineIntelEnabled: Boolean = false,
+    /** Use su for deep, root-level monitoring when the device is already rooted. */
+    val rootModeEnabled: Boolean = false,
 )
 
 enum class AiMode {

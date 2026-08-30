@@ -35,6 +35,7 @@ fun DashboardScreen(
 ) {
     val stats by viewModel.stats.collectAsState()
     val events by viewModel.events.collectAsState()
+    val blockedApps by viewModel.blockedApps.collectAsState()
 
     Column(
         modifier
@@ -82,13 +83,39 @@ fun DashboardScreen(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard("Blocked", stats.blocked.toString(), MaterialTheme.colorScheme.error, Modifier.weight(1f))
+            StatCard("Blocked apps", stats.blockedApps.toString(), MaterialTheme.colorScheme.error, Modifier.weight(1f))
             StatCard("Pending apps", stats.pendingApps.toString(), MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
-            StatCard("Flagged", stats.flaggedNow.toString(), MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+            StatCard("Dropped", stats.droppedConnections.toString(), MaterialTheme.colorScheme.primary, Modifier.weight(1f))
         }
 
         Button(onClick = { viewModel.autoTriageAll() }, modifier = Modifier.fillMaxWidth()) {
             Text("Auto-triage pending apps with BinaryCore")
+        }
+
+        SectionHeader("Blocked apps (${blockedApps.size})")
+        if (blockedApps.isEmpty()) {
+            Text(
+                "No apps blocked yet. Block one in the Apps tab and it appears here instantly — no monitoring required.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        } else {
+            blockedApps.take(6).forEach { app ->
+                Card {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(app.label, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Blocked",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
         }
 
         SectionHeader("Latest flagged connections")

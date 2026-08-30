@@ -38,6 +38,7 @@ private enum class Filter { ALL, FLAGGED, PENDING }
 fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     val events by viewModel.events.collectAsState()
     val assessments by viewModel.assessments.collectAsState()
+    val intel by viewModel.intel.collectAsState()
     val apps by viewModel.apps.collectAsState()
     var filter by remember { mutableStateOf(Filter.ALL) }
 
@@ -83,7 +84,11 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                         event = ev,
                         assessedText = assessments[ev.id]?.let { it.verdict to it.confidence },
                         assessmentReason = assessments[ev.id]?.reason,
-                        onAssess = { viewModel.assess(ev) },
+                        intel = intel[ev.remoteIp],
+                        onAssess = {
+                            viewModel.assess(ev)
+                            viewModel.lookupIntel(ev.remoteIp, ev.hostname)
+                        },
                         onAllow = { ev.packageName?.let { viewModel.setPolicy(it, Policy.ALLOW) } },
                         onBlock = { ev.packageName?.let { viewModel.setPolicy(it, Policy.BLOCK) } },
                     )
@@ -100,6 +105,7 @@ private fun ConnectionRow(
     event: ConnectionEvent,
     assessedText: Pair<com.fusion.firewall.ai.Verdict, Float>?,
     assessmentReason: String?,
+    intel: com.fusion.firewall.data.model.IpIntel?,
     onAssess: () -> Unit,
     onAllow: () -> Unit,
     onBlock: () -> Unit,
@@ -137,6 +143,7 @@ private fun ConnectionRow(
                     Text(it, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 2.dp))
                 }
             }
+            IntelLine(intel)
             Row(
                 Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
