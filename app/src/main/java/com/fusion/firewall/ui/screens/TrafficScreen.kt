@@ -50,12 +50,25 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     val assessments by viewModel.assessments.collectAsState()
     val stats by viewModel.stats.collectAsState()
     val blockedPkgs by viewModel.blockedPackages.collectAsState()
+    val custom by viewModel.customBlocked.collectAsState()
+    val whitelist by viewModel.whitelist.collectAsState()
+    val actionStatus by viewModel.actionStatus.collectAsState()
     var filter by remember { mutableStateOf(Filter.ALL) }
+
+    // Effective, live block state of a row (reflects custom blocks / app blocks /
+    // whitelist immediately, not just the historical result).
+    fun blockedNow(ev: com.fusion.firewall.data.model.ConnectionEvent): Boolean {
+        val host = ev.hostname
+        if (host != null && host in whitelist) return false
+        return !ev.allowed ||
+            (ev.packageName != null && ev.packageName in blockedPkgs) ||
+            (host != null && host in custom)
+    }
 
     val shown = when (filter) {
         Filter.ALL -> events
-        Filter.BLOCKED -> events.filter { !it.allowed }
-        Filter.ALLOWED -> events.filter { it.allowed }
+        Filter.BLOCKED -> events.filter { blockedNow(it) }
+        Filter.ALLOWED -> events.filter { !blockedNow(it) }
         Filter.MALICIOUS -> events.filter { assessments[it.id]?.verdict == Verdict.MALICIOUS }
         Filter.SUSPICIOUS -> events.filter { assessments[it.id]?.verdict == Verdict.SUSPICIOUS }
     }
@@ -88,6 +101,21 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f),
             ) { Text("Unblock all") }
         }
+        actionStatus?.let { msg ->
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    msg,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { viewModel.clearActionStatus() }) { Text("OK") }
+            }
+        }
         Row(
             Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -119,6 +147,7 @@ fun TrafficScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                 items(shown, key = { it.timestamp.toString() + it.id }) { ev ->
                     DnsRow(
                         event = ev,
+                        blocked = blockedNow(ev),
                         assessedText = assessments[ev.id]?.let { it.verdict to it.confidence },
                         assessmentReason = assessments[ev.id]?.reason,
                         appBlocked = ev.packageName != null && ev.packageName in blockedPkgs,
@@ -140,6 +169,7 @@ private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
 @Composable
 private fun DnsRow(
     event: ConnectionEvent,
+    blocked: Boolean,
     assessedText: Pair<Verdict, Float>?,
     assessmentReason: String?,
     appBlocked: Boolean,
@@ -163,7 +193,7 @@ private fun DnsRow(
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f),
                 )
-                DroppedBadge(blocked = !event.allowed)
+                DroppedBadge(blocked = blocked)
             }
             Text(
                 "${event.appLabel ?: event.packageName ?: "Unknown"}" +
@@ -185,7 +215,7 @@ private fun DnsRow(
             ) {
                 AssistChip(onClick = onAssess, label = { Text("Ask AI") })
                 AssistChip(onClick = onAskChat, label = { Text("Ask chat") })
-                if (event.allowed) {
+                if (!blocked) {
                     AssistChip(onClick = onBlock, label = { Text("Block site") })
                 } else {
                     AssistChip(onClick = onUnblock, label = { Text("Unblock site") })

@@ -232,17 +232,28 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearLog() = ConnectionLog.clear()
 
+    private val _actionStatus = MutableStateFlow<String?>(null)
+    val actionStatus: StateFlow<String?> = _actionStatus
+    fun clearActionStatus() { _actionStatus.value = null }
+
     /** Block every domain currently visible in the traffic log (adds them all). */
     fun blockAllVisible() = viewModelScope.launch {
         val domains = events.value.mapNotNull { it.hostname }.filter { it.isNotBlank() }.toSet()
-        if (domains.isNotEmpty()) container.blockLists.addCustomAll(domains)
+        if (domains.isEmpty()) {
+            _actionStatus.value = "No domains to block yet."
+        } else {
+            container.blockLists.addCustomAll(domains)
+            _actionStatus.value = "Blocked ${domains.size} domain(s). Lookups to them are now dropped."
+        }
     }
 
     /** Undo all manual blocking: clear custom blocked domains and re-allow blocked apps. */
     fun unblockAllVisible() = viewModelScope.launch {
+        val hadApps = blockedApps.value.size
         container.blockLists.clearCustom()
         val allowAll = blockedApps.value.associate { it.packageName to Policy.ALLOW }
         if (allowAll.isNotEmpty()) repo.setPolicies(allowAll)
+        _actionStatus.value = "Cleared custom blocks and re-allowed $hadApps app(s)."
     }
 
     // --- Block lists / whitelist ---------------------------------------------
