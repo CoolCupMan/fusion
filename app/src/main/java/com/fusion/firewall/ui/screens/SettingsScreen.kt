@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.fusion.firewall.BuildConfig
 import com.fusion.firewall.data.AiMode
+import com.fusion.firewall.data.ChatProvider
 import com.fusion.firewall.data.model.Policy
 import com.fusion.firewall.ui.FusionViewModel
 import com.fusion.firewall.ui.PolicySelector
@@ -46,6 +47,10 @@ fun SettingsScreen(
     var intelKey by remember(settings.ipIntelApiKey) { mutableStateOf(settings.ipIntelApiKey) }
     var chatKey by remember(settings.chatApiKey) { mutableStateOf(settings.chatApiKey) }
     var chatModel by remember(settings.chatModel) { mutableStateOf(settings.chatModel) }
+    var openaiKey by remember(settings.openaiApiKey) { mutableStateOf(settings.openaiApiKey) }
+    var openaiModel by remember(settings.openaiModel) { mutableStateOf(settings.openaiModel) }
+    var googleKey by remember(settings.googleApiKey) { mutableStateOf(settings.googleApiKey) }
+    var googleModel by remember(settings.googleModel) { mutableStateOf(settings.googleModel) }
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -148,29 +153,79 @@ fun SettingsScreen(
             onChange = { viewModel.setRootMode(it) },
         )
 
-        SectionHeader("AI chat (Claude)")
+        SectionHeader("AI chat")
         Text(
-            "Powers the chat assistant (the message button). Paste your Anthropic API key; " +
-                "it is stored only on this device and sent directly to the Claude API.",
+            "Powers the chat assistant (the message button). Choose a provider and paste that " +
+                "provider's API key; it is stored only on this device and sent directly to the " +
+                "provider's API.",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
         )
-        OutlinedTextField(
-            value = chatKey,
-            onValueChange = { chatKey = it; viewModel.setChatApiKey(it) },
-            label = { Text("Claude API key (sk-ant-…)") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = chatModel,
-            onValueChange = { chatModel = it; viewModel.setChatModel(it) },
-            label = { Text("Model") },
-            placeholder = { Text("claude-opus-5") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChatProvider.entries.forEach { p ->
+                FilterChip(
+                    selected = settings.chatProvider == p,
+                    onClick = { viewModel.setChatProvider(p) },
+                    label = { Text(p.label) },
+                )
+            }
+        }
+        when (settings.chatProvider) {
+            ChatProvider.ANTHROPIC -> {
+                OutlinedTextField(
+                    value = chatKey,
+                    onValueChange = { chatKey = it; viewModel.setChatApiKey(it) },
+                    label = { Text("Claude API key (sk-ant-…)") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = chatModel,
+                    onValueChange = { chatModel = it; viewModel.setChatModel(it) },
+                    label = { Text("Model") },
+                    placeholder = { Text("claude-opus-5") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            ChatProvider.OPENAI -> {
+                OutlinedTextField(
+                    value = openaiKey,
+                    onValueChange = { openaiKey = it; viewModel.setOpenaiApiKey(it) },
+                    label = { Text("OpenAI API key (sk-…)") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = openaiModel,
+                    onValueChange = { openaiModel = it; viewModel.setOpenaiModel(it) },
+                    label = { Text("Model") },
+                    placeholder = { Text("gpt-4o-mini") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            ChatProvider.GOOGLE -> {
+                OutlinedTextField(
+                    value = googleKey,
+                    onValueChange = { googleKey = it; viewModel.setGoogleApiKey(it) },
+                    label = { Text("Google AI (Gemini) API key") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = googleModel,
+                    onValueChange = { googleModel = it; viewModel.setGoogleModel(it) },
+                    label = { Text("Model") },
+                    placeholder = { Text("gemini-1.5-flash") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
 
         SectionHeader("Permissions")
         Card {

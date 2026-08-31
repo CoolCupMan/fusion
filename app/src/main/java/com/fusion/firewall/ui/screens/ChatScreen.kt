@@ -49,10 +49,10 @@ fun ChatScreen(viewModel: FusionViewModel, onClose: () -> Unit, modifier: Modifi
                 TextButton(onClick = onClose) { Text("Close") }
             }
         }
-        if (settings.chatApiKey.isBlank()) {
+        if (settings.activeChatKey.isBlank()) {
             Text(
-                "Add your Claude API key in Settings → AI chat to ask anything about your " +
-                    "connections and apps.",
+                "Add your ${settings.chatProvider.label} API key in Settings → AI chat to ask " +
+                    "anything about your connections and apps.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = 8.dp),

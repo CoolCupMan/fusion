@@ -40,6 +40,11 @@ class RulesRepository(private val context: Context) {
         val CHAT_ENDPOINT = stringPreferencesKey("chat_endpoint")
         val CHAT_KEY = stringPreferencesKey("chat_api_key")
         val CHAT_MODEL = stringPreferencesKey("chat_model")
+        val CHAT_PROVIDER = stringPreferencesKey("chat_provider")
+        val OPENAI_KEY = stringPreferencesKey("openai_api_key")
+        val OPENAI_MODEL = stringPreferencesKey("openai_model")
+        val GOOGLE_KEY = stringPreferencesKey("google_api_key")
+        val GOOGLE_MODEL = stringPreferencesKey("google_model")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -64,9 +69,14 @@ class RulesRepository(private val context: Context) {
             onlineIntelEnabled = prefs[Keys.ONLINE_INTEL] ?: false,
             rootModeEnabled = prefs[Keys.ROOT_MODE] ?: false,
             autoBlockDangerous = prefs[Keys.AUTO_BLOCK_DANGER] ?: false,
+            chatProvider = ChatProvider.fromName(prefs[Keys.CHAT_PROVIDER]),
             chatEndpoint = prefs[Keys.CHAT_ENDPOINT] ?: "https://api.anthropic.com/v1/messages",
             chatApiKey = prefs[Keys.CHAT_KEY] ?: "",
             chatModel = prefs[Keys.CHAT_MODEL] ?: "claude-opus-5",
+            openaiApiKey = prefs[Keys.OPENAI_KEY] ?: "",
+            openaiModel = prefs[Keys.OPENAI_MODEL] ?: "gpt-4o-mini",
+            googleApiKey = prefs[Keys.GOOGLE_KEY] ?: "",
+            googleModel = prefs[Keys.GOOGLE_MODEL] ?: "gemini-1.5-flash",
         )
     }
 
@@ -145,4 +155,19 @@ class RulesRepository(private val context: Context) {
 
     suspend fun setChatModel(value: String) =
         context.dataStore.edit { it[Keys.CHAT_MODEL] = value }
+
+    suspend fun setChatProvider(value: ChatProvider) =
+        context.dataStore.edit { it[Keys.CHAT_PROVIDER] = value.name }
+
+    suspend fun setOpenaiApiKey(value: String) =
+        context.dataStore.edit { it[Keys.OPENAI_KEY] = value }
+
+    suspend fun setOpenaiModel(value: String) =
+        context.dataStore.edit { it[Keys.OPENAI_MODEL] = value }
+
+    suspend fun setGoogleApiKey(value: String) =
+        context.dataStore.edit { it[Keys.GOOGLE_KEY] = value }
+
+    suspend fun setGoogleModel(value: String) =
+        context.dataStore.edit { it[Keys.GOOGLE_MODEL] = value }
 }

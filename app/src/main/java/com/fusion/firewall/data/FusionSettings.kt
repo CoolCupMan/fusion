@@ -31,11 +31,40 @@ data class FusionSettings(
     val rootModeEnabled: Boolean = false,
     /** Realtime monitoring auto-blocks apps whose traffic looks dangerous. */
     val autoBlockDangerous: Boolean = false,
-    /** General-purpose AI chat (Claude Messages API). Key is user-supplied. */
+    /** General-purpose AI chat. Provider + per-provider key/model are user-supplied. */
+    val chatProvider: ChatProvider = ChatProvider.ANTHROPIC,
     val chatEndpoint: String = "https://api.anthropic.com/v1/messages",
     val chatApiKey: String = "",
     val chatModel: String = "claude-opus-5",
-)
+    val openaiApiKey: String = "",
+    val openaiModel: String = "gpt-4o-mini",
+    val googleApiKey: String = "",
+    val googleModel: String = "gemini-1.5-flash",
+) {
+    /** API key for the currently-selected chat provider. */
+    val activeChatKey: String
+        get() = when (chatProvider) {
+            ChatProvider.ANTHROPIC -> chatApiKey
+            ChatProvider.OPENAI -> openaiApiKey
+            ChatProvider.GOOGLE -> googleApiKey
+        }
+    val activeChatModel: String
+        get() = when (chatProvider) {
+            ChatProvider.ANTHROPIC -> chatModel
+            ChatProvider.OPENAI -> openaiModel
+            ChatProvider.GOOGLE -> googleModel
+        }
+}
+
+enum class ChatProvider(val label: String) {
+    ANTHROPIC("Claude"),
+    OPENAI("OpenAI"),
+    GOOGLE("Gemini");
+
+    companion object {
+        fun fromName(name: String?): ChatProvider = entries.firstOrNull { it.name == name } ?: ANTHROPIC
+    }
+}
 
 enum class AiMode {
     /** On-device heuristic engine, fully offline. */

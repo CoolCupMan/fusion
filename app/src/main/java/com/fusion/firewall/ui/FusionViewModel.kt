@@ -160,6 +160,11 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     fun setChatEndpoint(v: String) = viewModelScope.launch { repo.setChatEndpoint(v) }
     fun setChatApiKey(v: String) = viewModelScope.launch { repo.setChatApiKey(v) }
     fun setChatModel(v: String) = viewModelScope.launch { repo.setChatModel(v) }
+    fun setChatProvider(p: com.fusion.firewall.data.ChatProvider) = viewModelScope.launch { repo.setChatProvider(p) }
+    fun setOpenaiApiKey(v: String) = viewModelScope.launch { repo.setOpenaiApiKey(v) }
+    fun setOpenaiModel(v: String) = viewModelScope.launch { repo.setOpenaiModel(v) }
+    fun setGoogleApiKey(v: String) = viewModelScope.launch { repo.setGoogleApiKey(v) }
+    fun setGoogleModel(v: String) = viewModelScope.launch { repo.setGoogleModel(v) }
     fun clearChat() { _chatMessages.value = emptyList() }
 
     fun sendChat(text: String) {
@@ -203,7 +208,7 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (recentBlocked.isNotEmpty()) appendLine("Recently blocked domains: " + recentBlocked.joinToString(", "))
             if (recentAllowed.isNotEmpty()) appendLine("Recently allowed domains: " + recentAllowed.joinToString(", "))
-            appendLine("Usage-access granted: $usageAccessGranted; chat model: ${s.chatModel}")
+            appendLine("Usage-access granted: $usageAccessGranted; chat: ${s.chatProvider.label}/${s.activeChatModel}")
         }
     }
 
