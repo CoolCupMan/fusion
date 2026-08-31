@@ -94,7 +94,10 @@ fun FusionRoot(
                 onSeeTraffic = { tab = Tab.TRAFFIC },
                 onOpenStats = { showStats = true },
             )
-            Tab.TRAFFIC -> TrafficScreen(viewModel, content)
+            Tab.TRAFFIC -> TrafficScreen(
+                viewModel, content,
+                onEnableProtection = { onToggleFirewall(true) },
+            )
             Tab.APPS -> AppsScreen(viewModel, content)
             Tab.LISTS -> ListsScreen(viewModel, content)
             Tab.INTEL -> IntelScreen(viewModel, content)

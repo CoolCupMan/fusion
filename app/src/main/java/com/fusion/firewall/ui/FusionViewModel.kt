@@ -146,6 +146,16 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setAutoBlockDangerous(v: Boolean) = viewModelScope.launch { repo.setAutoBlockDangerous(v) }
 
+    /**
+     * Freeze/unfreeze all traffic (kill switch). Freezing rebuilds the tunnel to
+     * capture and drop every packet; if protection is off, [onNeedStart] is
+     * invoked so the caller can start the VPN (with consent) first.
+     */
+    fun setFrozen(v: Boolean, onNeedStart: (() -> Unit)? = null) = viewModelScope.launch {
+        repo.setFrozen(v)
+        if (v && !running.value) onNeedStart?.invoke()
+    }
+
     // --- General-purpose AI chat ---------------------------------------------
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages

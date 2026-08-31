@@ -37,6 +37,7 @@ class RulesRepository(private val context: Context) {
         val ONLINE_INTEL = booleanPreferencesKey("online_intel")
         val ROOT_MODE = booleanPreferencesKey("root_mode")
         val AUTO_BLOCK_DANGER = booleanPreferencesKey("auto_block_danger")
+        val FROZEN = booleanPreferencesKey("frozen")
         val CHAT_ENDPOINT = stringPreferencesKey("chat_endpoint")
         val CHAT_KEY = stringPreferencesKey("chat_api_key")
         val CHAT_MODEL = stringPreferencesKey("chat_model")
@@ -69,6 +70,7 @@ class RulesRepository(private val context: Context) {
             onlineIntelEnabled = prefs[Keys.ONLINE_INTEL] ?: false,
             rootModeEnabled = prefs[Keys.ROOT_MODE] ?: false,
             autoBlockDangerous = prefs[Keys.AUTO_BLOCK_DANGER] ?: false,
+            frozen = prefs[Keys.FROZEN] ?: false,
             chatProvider = ChatProvider.fromName(prefs[Keys.CHAT_PROVIDER]),
             chatEndpoint = prefs[Keys.CHAT_ENDPOINT] ?: "https://api.anthropic.com/v1/messages",
             chatApiKey = prefs[Keys.CHAT_KEY] ?: "",
@@ -146,6 +148,9 @@ class RulesRepository(private val context: Context) {
 
     suspend fun setAutoBlockDangerous(value: Boolean) =
         context.dataStore.edit { it[Keys.AUTO_BLOCK_DANGER] = value }
+
+    suspend fun setFrozen(value: Boolean) =
+        context.dataStore.edit { it[Keys.FROZEN] = value }
 
     suspend fun setChatEndpoint(value: String) =
         context.dataStore.edit { it[Keys.CHAT_ENDPOINT] = value }

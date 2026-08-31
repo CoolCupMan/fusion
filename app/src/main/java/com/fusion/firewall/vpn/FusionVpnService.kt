@@ -59,6 +59,8 @@ class FusionVpnService : VpnService() {
     @Volatile private var tunnel: ParcelFileDescriptor? = null
     @Volatile private var packetThread: Thread? = null
     @Volatile private var refreshJob: Job? = null
+    @Volatile private var reestablishJob: Job? = null
+    @Volatile private var dropAll = false
     @Volatile private var upstreams: List<InetAddress> = defaultUpstreams()
     @Volatile private var settings: FusionSettings = FusionSettings()
     @Volatile private var rules: Map<String, Policy> = emptyMap()
@@ -74,7 +76,15 @@ class FusionVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         app = application as FusionApp
-        app.container.repository.settings.onEach { settings = it }.launchIn(scope)
+        app.container.repository.settings.onEach {
+            val wasFrozen = settings.frozen
+            settings = it
+            // A freeze toggle changes the tunnel shape, so rebuild it.
+            if (isRunning.value && it.frozen != wasFrozen) {
+                reestablishJob?.cancel()
+                reestablishJob = scope.launch { delay(150); establish() }
+            }
+        }.launchIn(scope)
         app.container.repository.rules.onEach { rules = it }.launchIn(scope)
         // Rebuild the blocker whenever rules or any block list change (no tunnel
         // rebuild needed — the filter reads the blocker live).
@@ -131,12 +141,20 @@ class FusionVpnService : VpnService() {
     }
 
     private fun establish() {
+        val frozen = settings.frozen
+        dropAll = frozen
         val builder = Builder()
             .setSession(getString(R.string.vpn_session))
             .setMtu(1500)
             .addAddress("10.0.0.2", 32)
-            .addDnsServer("10.0.0.1")
-            .addRoute("10.0.0.1", 32)
+        if (frozen) {
+            // Kill switch: capture ALL traffic (v4 + v6) and drop it in the loop.
+            builder.addRoute("0.0.0.0", 0)
+            runCatching { builder.addAddress("fd00:2025:c0de::1", 64).addRoute("::", 0) }
+        } else {
+            // Normal DNS-filter mode: only the fake resolver is routed in.
+            builder.addDnsServer("10.0.0.1").addRoute("10.0.0.1", 32)
+        }
         runCatching { builder.addDisallowedApplication(packageName) }
 
         val newTunnel = runCatching { builder.establish() }.getOrNull()
@@ -166,6 +184,7 @@ class FusionVpnService : VpnService() {
             while (!Thread.currentThread().isInterrupted && tunnel === fd) {
                 val n = input.read(buffer)
                 if (n <= 0) { if (n < 0) break else continue }
+                if (dropAll) continue   // frozen kill switch: discard every packet
                 runCatching { handleDns(buffer, n, output) }
             }
         } catch (_: Exception) {
