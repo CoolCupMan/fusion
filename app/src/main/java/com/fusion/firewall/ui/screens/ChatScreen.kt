@@ -57,6 +57,16 @@ fun ChatScreen(viewModel: FusionViewModel, onClose: () -> Unit, modifier: Modifi
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
+        } else if (messages.isEmpty()) {
+            Text(
+                "Ask me anything about Fusion — I can see your current protection state, live " +
+                    "traffic, blocked apps, block lists and flagged apps, so no need to copy " +
+                    "anything. Try: \"why is X blocked?\", \"which apps look dangerous?\", or " +
+                    "\"how do I block ads?\"",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
         }
 
         LazyColumn(

@@ -167,10 +167,43 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         if (msg.isEmpty() || _chatBusy.value) return
         _chatMessages.value = _chatMessages.value + ChatMessage("user", msg)
         _chatBusy.value = true
+        val context = buildAppContext()
         viewModelScope.launch {
-            val reply = ChatClient.send(_chatMessages.value, settings.value)
+            val reply = ChatClient.send(_chatMessages.value, settings.value, context)
             _chatMessages.value = _chatMessages.value + ChatMessage("assistant", reply)
             _chatBusy.value = false
+        }
+    }
+
+    /** A compact live snapshot of the app so the assistant can answer by deduction. */
+    private fun buildAppContext(): String {
+        val s = settings.value
+        val st = stats.value
+        val blocked = blockedApps.value
+        val lists = blockLists.value
+        val custom = customBlocked.value
+        val white = whitelist.value
+        val ev = events.value
+        val recentBlocked = ev.filter { !it.allowed }.mapNotNull { it.hostname }.distinct().take(25)
+        val recentAllowed = ev.filter { it.allowed }.mapNotNull { it.hostname }.distinct().take(15)
+        val dangerous = appThreats.value.filter { it.verdict != Verdict.SAFE }.take(12)
+        return buildString {
+            appendLine("Protection: ${if (running.value) "ON" else "OFF"}; default policy for unconfirmed apps: ${s.defaultPolicy}")
+            appendLine("Counts: dropped=${st.droppedConnections}, allowed=${st.allowed}, blockedApps=${st.blockedApps}, pendingApps=${st.pendingApps}, flaggedNow=${st.flaggedNow}")
+            appendLine("Auto-block dangerous apps: ${s.autoBlockDangerous}; AI auto-apply: ${s.aiAutoApply}; BinaryCore mode: ${s.aiMode}")
+            if (blocked.isNotEmpty())
+                appendLine("Blocked apps (${blocked.size}): " + blocked.take(30).joinToString(", ") { it.label })
+            if (lists.isNotEmpty())
+                appendLine("Imported block lists: " + lists.joinToString("; ") { "${it.name} [${it.count} domains, ${if (it.enabled) "enabled" else "disabled"}]" })
+            appendLine("Custom blocked domains: ${custom.size}" + if (custom.isNotEmpty()) " (e.g. ${custom.take(15).joinToString(", ")})" else "")
+            appendLine("Whitelist: ${white.size}" + if (white.isNotEmpty()) " (e.g. ${white.take(15).joinToString(", ")})" else "")
+            if (dangerous.isNotEmpty()) {
+                appendLine("Flagged apps:")
+                dangerous.forEach { t -> appendLine("  - ${t.label} [${t.verdict}, score ${t.score}]: ${t.reasons.joinToString("; ")}") }
+            }
+            if (recentBlocked.isNotEmpty()) appendLine("Recently blocked domains: " + recentBlocked.joinToString(", "))
+            if (recentAllowed.isNotEmpty()) appendLine("Recently allowed domains: " + recentAllowed.joinToString(", "))
+            appendLine("Usage-access granted: $usageAccessGranted; chat model: ${s.chatModel}")
         }
     }
 
