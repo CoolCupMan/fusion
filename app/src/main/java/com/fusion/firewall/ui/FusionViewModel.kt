@@ -226,6 +226,19 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearLog() = ConnectionLog.clear()
 
+    /** Block every domain currently visible in the traffic log (adds them all). */
+    fun blockAllVisible() = viewModelScope.launch {
+        val domains = events.value.mapNotNull { it.hostname }.filter { it.isNotBlank() }.toSet()
+        if (domains.isNotEmpty()) container.blockLists.addCustomAll(domains)
+    }
+
+    /** Undo all manual blocking: clear custom blocked domains and re-allow blocked apps. */
+    fun unblockAllVisible() = viewModelScope.launch {
+        container.blockLists.clearCustom()
+        val allowAll = blockedApps.value.associate { it.packageName to Policy.ALLOW }
+        if (allowAll.isNotEmpty()) repo.setPolicies(allowAll)
+    }
+
     // --- Block lists / whitelist ---------------------------------------------
     val blockLists: StateFlow<List<com.fusion.firewall.data.BlockListMeta>> =
         container.blockLists.lists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

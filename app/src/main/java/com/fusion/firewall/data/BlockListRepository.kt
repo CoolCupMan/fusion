@@ -73,7 +73,10 @@ class BlockListRepository(private val context: Context) {
         runCatching { File(dir, "$id.txt").readLines().toSet() }.getOrDefault(emptySet())
 
     suspend fun addCustom(domain: String) = mutateSet(Keys.CUSTOM) { it + normalize(domain) }
+    suspend fun addCustomAll(domains: Set<String>) =
+        mutateSet(Keys.CUSTOM) { it + domains.map { d -> normalize(d) }.filter { d -> d.isNotBlank() } }
     suspend fun removeCustom(domain: String) = mutateSet(Keys.CUSTOM) { it - normalize(domain) }
+    suspend fun clearCustom() = mutateSet(Keys.CUSTOM) { emptySet() }
     suspend fun addWhitelist(domain: String) = mutateSet(Keys.WHITELIST) { it + normalize(domain) }
     suspend fun removeWhitelist(domain: String) = mutateSet(Keys.WHITELIST) { it - normalize(domain) }
 
