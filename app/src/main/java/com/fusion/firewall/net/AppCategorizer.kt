@@ -8,6 +8,16 @@ enum class AppCategory(val label: String) {
     SHOPPING("Shopping"),
     MEDIA("Media & streaming"),
     GAMES("Games"),
+    MAPS("Maps & navigation"),
+    WEATHER("Weather"),
+    HEALTH("Health & fitness"),
+    FOOD("Food & delivery"),
+    TRAVEL("Travel & transport"),
+    DATING("Dating"),
+    PHOTO("Photo & camera"),
+    CLOUD("Cloud & storage"),
+    IOT("Smart home & IoT"),
+    SECURITY("Security & privacy"),
     BROWSERS("Browsers & network"),
     PRODUCTIVITY("Productivity"),
     EDUCATION("Science & learning"),
@@ -52,6 +62,45 @@ object AppCategorizer {
         AppCategory.SHOPPING to listOf(
             "amazon", "ebay", "aliexpress", "etsy", "shein", "temu", "zalando", "otto", "wish",
             "mercado", "shop", "store.", "checkout",
+        ),
+        AppCategory.MAPS to listOf(
+            "maps", "navigation", "navigator", "waze", "here.app", "tomtom", "sygic", "osmand",
+            "citymapper", "transit", "geo", "gps",
+        ),
+        AppCategory.WEATHER to listOf(
+            "weather", "forecast", "accuweather", "wetter", "meteo", "windy", "climate",
+        ),
+        AppCategory.HEALTH to listOf(
+            "health", "fitness", "workout", "strava", "runtastic", "fitbit", "garmin",
+            "samsunghealth", "googlefit", "meditation", "mindfulness", "calm", "headspace",
+        ),
+        AppCategory.FOOD to listOf(
+            "ubereats", "doordash", "grubhub", "deliveroo", "lieferando", "justeat", "delivery",
+            "food", "restaurant", "recipe", "yelp", "zomato", "swiggy",
+        ),
+        AppCategory.TRAVEL to listOf(
+            "travel", "flight", "airline", "booking", "expedia", "airbnb", "hotel", ".trip",
+            "uber", "lyft", "bolt", "freenow", "railway", "bahn", "ryanair", "lufthansa", "skyscanner",
+        ),
+        AppCategory.DATING to listOf(
+            "dating", "tinder", "bumble", "hinge", "okcupid", "grindr", "badoo", "match.", "meetic",
+        ),
+        AppCategory.PHOTO to listOf(
+            "camera", "gallery", "photos", "gopro", "snapseed", "lightroom", "vsco", "picsart",
+            "canva", "photoeditor",
+        ),
+        AppCategory.CLOUD to listOf(
+            "cloud", "backup", "gdrive", "icloud", "mega.", "pcloud", "nextcloud", "synology",
+            "megasync", "storage.",
+        ),
+        AppCategory.IOT to listOf(
+            "smarthome", "smartthings", "smartlife", "tuya", "homeassistant", "philips.lighting",
+            ".hue", "mihome", "smarthome", "nest", "ring.", "wyze", "kasa", "tplink", "alexa", "iot",
+        ),
+        AppCategory.SECURITY to listOf(
+            "antivirus", "malwarebytes", "avast", "avg.", "norton", "kaspersky", "bitdefender",
+            "eset", "firewall", "password", "bitwarden", "1password", "lastpass", "authenticator",
+            "2fa", "openvpn", "wireguard", "vpn", "proxy",
         ),
         AppCategory.BROWSERS to listOf(
             "chrome", "firefox", "browser", "opera", "brave", "duckduckgo", "com.microsoft.emmx",

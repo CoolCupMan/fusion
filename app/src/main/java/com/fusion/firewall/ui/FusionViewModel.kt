@@ -365,6 +365,38 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         if (updates.isNotEmpty()) repo.setPolicies(updates)
     }
 
+    /**
+     * Block every observed domain classified as a given traffic type (ads,
+     * analytics, telemetry, streaming, …). Adds them to the custom block list so
+     * lookups to them are sinkholed. Only domains Fusion has actually seen can be
+     * classified, so let traffic accrue first for the fullest effect.
+     */
+    fun blockTrafficCategory(cat: com.fusion.firewall.net.TrafficCategory) = viewModelScope.launch {
+        val domains = trafficDomainsOf(cat)
+        if (domains.isEmpty()) {
+            _actionStatus.value = "No ${cat.label} domains seen yet."
+        } else {
+            container.blockLists.addCustomAll(domains)
+            _actionStatus.value = "Blocked ${domains.size} ${cat.label} domain(s)."
+        }
+    }
+
+    /** Unblock (whitelist + drop custom) every observed domain of a traffic type. */
+    fun unblockTrafficCategory(cat: com.fusion.firewall.net.TrafficCategory) = viewModelScope.launch {
+        val domains = trafficDomainsOf(cat)
+        if (domains.isEmpty()) {
+            _actionStatus.value = "No ${cat.label} domains seen yet."
+        } else {
+            domains.forEach { container.blockLists.addWhitelist(it); container.blockLists.removeCustom(it) }
+            _actionStatus.value = "Unblocked ${domains.size} ${cat.label} domain(s)."
+        }
+    }
+
+    private fun trafficDomainsOf(cat: com.fusion.firewall.net.TrafficCategory): Set<String> =
+        events.value.mapNotNull { it.hostname }.filter { it.isNotBlank() }
+            .filter { com.fusion.firewall.net.TrafficCategorizer.classify(it) == cat }
+            .toSet()
+
     fun setDefaultPolicy(policy: Policy) = viewModelScope.launch { repo.setDefaultPolicy(policy) }
     fun setPromptOnNewApps(v: Boolean) = viewModelScope.launch { repo.setPromptOnNewApps(v) }
     fun setBlockPending(v: Boolean) = viewModelScope.launch { repo.setBlockPending(v) }

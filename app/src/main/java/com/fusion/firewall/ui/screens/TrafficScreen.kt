@@ -38,6 +38,7 @@ import com.fusion.firewall.ai.Verdict
 import com.fusion.firewall.data.model.ConnectionEvent
 import com.fusion.firewall.data.model.Policy
 import com.fusion.firewall.net.AppCategorizer
+import com.fusion.firewall.net.TrafficCategorizer
 import com.fusion.firewall.ui.FusionViewModel
 import com.fusion.firewall.ui.SectionHeader
 import com.fusion.firewall.ui.VerdictBadge
@@ -64,6 +65,7 @@ fun TrafficScreen(
     val apps by viewModel.apps.collectAsState()
     var filter by remember { mutableStateOf(Filter.ALL) }
     var showCats by remember { mutableStateOf(false) }
+    var showTypes by remember { mutableStateOf(false) }
 
     val catGroups = remember(apps) {
         apps.groupBy { AppCategorizer.categoryOf(it.packageName, it.label, it.system) }
@@ -75,6 +77,13 @@ fun TrafficScreen(
             .map { it.key to it.value.size }
             .sortedByDescending { it.second }
             .take(12)
+    }
+    // Traffic-type groups: distinct observed domains classified into families.
+    val typeGroups = remember(events) {
+        events.mapNotNull { it.hostname }.filter { it.isNotBlank() }.distinct()
+            .groupingBy { TrafficCategorizer.classify(it) }.eachCount()
+            .toList()
+            .sortedByDescending { it.second }
     }
 
     // Effective, live block state of a row (reflects custom blocks / app blocks /
@@ -156,15 +165,42 @@ fun TrafficScreen(
             }
             TextButton(onClick = { viewModel.clearLog() }) { Text("Clear") }
         }
-        OutlinedButton(
-            onClick = { showCats = !showCats },
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        ) { Text(if (showCats) "Hide categories ▲" else "Block traffic by category ▾") }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = { showCats = !showCats },
+                modifier = Modifier.weight(1f),
+            ) { Text(if (showCats) "Hide apps ▲" else "By app category ▾") }
+            OutlinedButton(
+                onClick = { showTypes = !showTypes },
+                modifier = Modifier.weight(1f),
+            ) { Text(if (showTypes) "Hide types ▲" else "By traffic type ▾") }
+        }
 
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 12.dp),
         ) {
+            if (showTypes) {
+                item {
+                    Text(
+                        "Block or unblock a whole traffic family at once — advertising, analytics, " +
+                            "telemetry, streaming, push and more. Fusion classifies the domains it " +
+                            "has actually seen, so counts grow as traffic accrues; blocking adds " +
+                            "those domains to your block list.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                }
+                item { SectionHeader("Traffic types (by domain)") }
+                items(typeGroups, key = { "type:" + it.first.name }) { (type, count) ->
+                    GroupRow(type.label, count, "domain(s) seen",
+                        onBlock = { viewModel.blockTrafficCategory(type) },
+                        onUnblock = { viewModel.unblockTrafficCategory(type) })
+                }
+            }
             if (showCats) {
                 item {
                     Text(
@@ -175,18 +211,20 @@ fun TrafficScreen(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     )
                 }
-                item { SectionHeader("Categories") }
+                item { SectionHeader("App categories") }
                 items(catGroups, key = { "cat:" + it.first.name }) { (cat, count) ->
-                    GroupRow(cat.label, count,
+                    GroupRow(cat.label, count, "app(s)",
                         onBlock = { viewModel.blockCategory(cat) },
                         onUnblock = { viewModel.unblockCategory(cat) })
                 }
                 item { SectionHeader("By vendor (same-vendor hosts)") }
                 items(vendorGroups, key = { "ven:" + it.first }) { (vendor, count) ->
-                    GroupRow(vendor, count,
+                    GroupRow(vendor, count, "app(s)",
                         onBlock = { viewModel.blockVendor(vendor) },
                         onUnblock = { viewModel.unblockVendor(vendor) })
                 }
+            }
+            if (showCats || showTypes) {
                 item { SectionHeader("Live traffic") }
             }
             if (shown.isEmpty()) {
@@ -253,7 +291,7 @@ private fun FreezeCard(frozen: Boolean, onToggle: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun GroupRow(name: String, count: Int, onBlock: () -> Unit, onUnblock: () -> Unit) {
+private fun GroupRow(name: String, count: Int, unit: String, onBlock: () -> Unit, onUnblock: () -> Unit) {
     Card {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -262,7 +300,7 @@ private fun GroupRow(name: String, count: Int, onBlock: () -> Unit, onUnblock: (
         ) {
             Column(Modifier.weight(1f)) {
                 Text(name, fontWeight = FontWeight.SemiBold)
-                Text("$count app(s)", style = MaterialTheme.typography.labelSmall,
+                Text("$count $unit", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
             TextButton(onClick = onBlock) { Text("Block", color = MaterialTheme.colorScheme.error) }
