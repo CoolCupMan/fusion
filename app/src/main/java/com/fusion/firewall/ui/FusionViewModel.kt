@@ -218,6 +218,20 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         repo.setPolicy(pkg, policy)
     }
 
+    /** Block every installed app (except Fusion itself). */
+    fun blockAllApps() = viewModelScope.launch {
+        val self = getApplication<android.app.Application>().packageName
+        val updates = apps.value.filter { it.packageName != self }.associate { it.packageName to Policy.BLOCK }
+        if (updates.isNotEmpty()) repo.setPolicies(updates)
+    }
+
+    /** Allow every installed app (clears all app blocks). */
+    fun unblockAllApps() = viewModelScope.launch {
+        val self = getApplication<android.app.Application>().packageName
+        val updates = apps.value.filter { it.packageName != self }.associate { it.packageName to Policy.ALLOW }
+        if (updates.isNotEmpty()) repo.setPolicies(updates)
+    }
+
     fun setDefaultPolicy(policy: Policy) = viewModelScope.launch { repo.setDefaultPolicy(policy) }
     fun setPromptOnNewApps(v: Boolean) = viewModelScope.launch { repo.setPromptOnNewApps(v) }
     fun setBlockPending(v: Boolean) = viewModelScope.launch { repo.setBlockPending(v) }
