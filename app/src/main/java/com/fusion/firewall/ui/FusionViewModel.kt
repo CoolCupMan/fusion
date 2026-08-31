@@ -152,6 +152,11 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     private val _chatBusy = MutableStateFlow(false)
     val chatBusy: StateFlow<Boolean> = _chatBusy
 
+    /** Incremented whenever something requests the chat overlay be opened. */
+    private val _openChatRequest = MutableStateFlow(0)
+    val openChatRequest: StateFlow<Int> = _openChatRequest
+    fun requestOpenChat() { _openChatRequest.value++ }
+
     fun setChatEndpoint(v: String) = viewModelScope.launch { repo.setChatEndpoint(v) }
     fun setChatApiKey(v: String) = viewModelScope.launch { repo.setChatApiKey(v) }
     fun setChatModel(v: String) = viewModelScope.launch { repo.setChatModel(v) }
@@ -172,6 +177,7 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     /** Seed the chat with a question about a specific connection/domain. */
     fun askAboutDomain(domain: String?, app: String?) {
         val d = domain?.takeIf { it.isNotBlank() } ?: return
+        requestOpenChat()
         sendChat("What is the connection to \"$d\"" + (app?.let { " from the app $it" } ?: "") +
             " used for, and should I block it?")
     }

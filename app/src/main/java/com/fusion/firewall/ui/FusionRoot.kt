@@ -16,6 +16,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +49,12 @@ fun FusionRoot(
 ) {
     var tab by remember { mutableStateOf(Tab.DASHBOARD) }
     var showChat by remember { mutableStateOf(false) }
+
+    // Open the chat overlay whenever an "Ask chat" action requests it.
+    val openChatRequest by viewModel.openChatRequest.collectAsState()
+    LaunchedEffect(openChatRequest) {
+        if (openChatRequest > 0) showChat = true
+    }
 
     Scaffold(
         bottomBar = {

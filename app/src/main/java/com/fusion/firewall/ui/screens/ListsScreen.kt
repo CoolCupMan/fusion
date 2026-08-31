@@ -174,11 +174,16 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
+                        val whitelisted = ev.hostname != null && ev.hostname in whitelist
                         Row(
                             Modifier.padding(top = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            TextButton(onClick = { ev.hostname?.let { viewModel.unblockDomain(it) } }) { Text("Unblock") }
+                            TextButton(
+                                onClick = { ev.hostname?.let { viewModel.unblockDomain(it) } },
+                                enabled = !whitelisted,
+                            ) { Text(if (whitelisted) "Unblocked ✓" else "Unblock") }
                             TextButton(onClick = { viewModel.askAboutDomain(ev.hostname, ev.appLabel) }) { Text("Ask chat") }
                         }
                     }
