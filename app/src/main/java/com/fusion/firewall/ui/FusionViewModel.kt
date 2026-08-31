@@ -174,9 +174,67 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         _chatBusy.value = true
         val context = buildAppContext()
         viewModelScope.launch {
-            val reply = ChatClient.send(_chatMessages.value, settings.value, context)
-            _chatMessages.value = _chatMessages.value + ChatMessage("assistant", reply)
+            val raw = ChatClient.send(_chatMessages.value, settings.value, context)
+            val (clean, actions) = com.fusion.firewall.ai.ChatActions.parse(raw)
+            _chatMessages.value = _chatMessages.value +
+                ChatMessage("assistant", clean.ifBlank { if (actions.isEmpty()) raw else "Done." })
+            for (a in actions) {
+                val result = runCatching { applyChatAction(a) }.getOrElse { "⚠️ Action failed: ${it.message}" }
+                _chatMessages.value = _chatMessages.value + ChatMessage("assistant", result)
+            }
             _chatBusy.value = false
+        }
+    }
+
+    /** Execute an assistant action (block/allow apps, domains, categories, all). */
+    private suspend fun applyChatAction(a: com.fusion.firewall.ai.ChatAction): String {
+        val self = selfPkg()
+        val t = a.target?.trim().orEmpty()
+        return when (a.action.lowercase()) {
+            "block_app", "allow_app" -> {
+                val policy = if (a.action.equals("block_app", true)) Policy.BLOCK else Policy.ALLOW
+                if (t.isBlank()) return "⚠️ No app specified."
+                val matches = apps.value.filter {
+                    it.packageName != self &&
+                        (it.packageName.equals(t, true) || it.label.contains(t, true) || it.packageName.contains(t, true))
+                }
+                if (matches.isEmpty()) "⚠️ No installed app matched \"$t\"."
+                else {
+                    repo.setPolicies(matches.associate { it.packageName to policy })
+                    (if (policy == Policy.BLOCK) "⛔ Blocked " else "✅ Allowed ") +
+                        matches.take(6).joinToString(", ") { it.label } +
+                        (if (matches.size > 6) " +${matches.size - 6} more" else "")
+                }
+            }
+            "block_domain" ->
+                if (t.isBlank()) "⚠️ No domain specified." else { container.blockLists.addCustom(t); "⛔ Blocked domain $t" }
+            "unblock_domain", "allow_domain" ->
+                if (t.isBlank()) "⚠️ No domain specified."
+                else { container.blockLists.addWhitelist(t); container.blockLists.removeCustom(t); "✅ Unblocked domain $t" }
+            "block_category", "unblock_category" -> {
+                val cat = com.fusion.firewall.net.AppCategory.entries.firstOrNull {
+                    it.label.contains(t, true) || it.name.replace("_", " ").contains(t, true)
+                } ?: return "⚠️ No category matched \"$t\"."
+                val policy = if (a.action.startsWith("block")) Policy.BLOCK else Policy.ALLOW
+                val matches = apps.value.filter {
+                    it.packageName != self &&
+                        com.fusion.firewall.net.AppCategorizer.categoryOf(it.packageName, it.label, it.system) == cat
+                }
+                if (matches.isEmpty()) "No apps found in ${cat.label}."
+                else {
+                    repo.setPolicies(matches.associate { it.packageName to policy })
+                    (if (policy == Policy.BLOCK) "⛔ Blocked " else "✅ Allowed ") + "${matches.size} apps in ${cat.label}."
+                }
+            }
+            "block_all_apps" -> {
+                val u = apps.value.filter { it.packageName != self }.associate { it.packageName to Policy.BLOCK }
+                repo.setPolicies(u); "⛔ Blocked all apps (${u.size})."
+            }
+            "unblock_all_apps" -> {
+                val u = apps.value.filter { it.packageName != self }.associate { it.packageName to Policy.ALLOW }
+                repo.setPolicies(u); "✅ Allowed all apps (${u.size})."
+            }
+            else -> "⚠️ Unknown action \"${a.action}\"."
         }
     }
 

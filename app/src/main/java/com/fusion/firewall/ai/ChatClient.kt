@@ -30,7 +30,17 @@ object ChatClient {
             "below — do NOT ask the user to copy-paste anything; you can already see the " +
             "relevant state. Be concise and concrete. When asked how to do something, refer to " +
             "the exact tab/button. When asked about a domain/connection, explain what it is " +
-            "likely for and whether blocking it is safe."
+            "likely for and whether blocking it is safe.\n\n" +
+            "YOU CAN TAKE ACTIONS. When (and only when) the user asks you to make a change or " +
+            "clearly approves one, append action directives to the END of your reply — one per " +
+            "line — each EXACTLY in this form:\n" +
+            "@@FUSION {\"action\":\"<name>\",\"target\":\"<value>\"}\n" +
+            "Supported actions: block_app, allow_app (target = app name or package); " +
+            "block_domain, unblock_domain (target = domain); block_category, unblock_category " +
+            "(target = e.g. Social media, Finance, Games, Messaging, Browsers, System); " +
+            "block_all_apps, unblock_all_apps (no target). Emit one directive line per change. " +
+            "Say briefly in prose what you're doing first. Never show this @@FUSION syntax when " +
+            "the user did not ask for a change, and never act without being asked."
 
     /** Static description of how Fusion works, so the assistant can answer usage questions. */
     private const val APP_GUIDE = """

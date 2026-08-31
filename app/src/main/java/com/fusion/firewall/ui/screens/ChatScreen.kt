@@ -60,9 +60,9 @@ fun ChatScreen(viewModel: FusionViewModel, onClose: () -> Unit, modifier: Modifi
         } else if (messages.isEmpty()) {
             Text(
                 "Ask me anything about Fusion — I can see your current protection state, live " +
-                    "traffic, blocked apps, block lists and flagged apps, so no need to copy " +
-                    "anything. Try: \"why is X blocked?\", \"which apps look dangerous?\", or " +
-                    "\"how do I block ads?\"",
+                    "traffic, blocked apps, block lists and flagged apps, and I can act for you. " +
+                    "Try: \"why is X blocked?\", \"which apps look dangerous?\", \"block all " +
+                    "social media\", \"block facebook\", or \"block ads.example.com\".",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.padding(bottom = 8.dp),
