@@ -265,6 +265,33 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         if (updates.isNotEmpty()) repo.setPolicies(updates)
     }
 
+    private fun selfPkg() = getApplication<android.app.Application>().packageName
+
+    fun blockCategory(cat: com.fusion.firewall.net.AppCategory) =
+        setCategory(cat, Policy.BLOCK)
+    fun unblockCategory(cat: com.fusion.firewall.net.AppCategory) =
+        setCategory(cat, Policy.ALLOW)
+
+    private fun setCategory(cat: com.fusion.firewall.net.AppCategory, policy: Policy) = viewModelScope.launch {
+        val self = selfPkg()
+        val updates = apps.value.filter {
+            it.packageName != self &&
+                com.fusion.firewall.net.AppCategorizer.categoryOf(it.packageName, it.label, it.system) == cat
+        }.associate { it.packageName to policy }
+        if (updates.isNotEmpty()) repo.setPolicies(updates)
+    }
+
+    fun blockVendor(vendor: String) = setVendor(vendor, Policy.BLOCK)
+    fun unblockVendor(vendor: String) = setVendor(vendor, Policy.ALLOW)
+
+    private fun setVendor(vendor: String, policy: Policy) = viewModelScope.launch {
+        val self = selfPkg()
+        val updates = apps.value.filter {
+            it.packageName != self && com.fusion.firewall.net.AppCategorizer.vendorOf(it.packageName) == vendor
+        }.associate { it.packageName to policy }
+        if (updates.isNotEmpty()) repo.setPolicies(updates)
+    }
+
     fun setDefaultPolicy(policy: Policy) = viewModelScope.launch { repo.setDefaultPolicy(policy) }
     fun setPromptOnNewApps(v: Boolean) = viewModelScope.launch { repo.setPromptOnNewApps(v) }
     fun setBlockPending(v: Boolean) = viewModelScope.launch { repo.setBlockPending(v) }
