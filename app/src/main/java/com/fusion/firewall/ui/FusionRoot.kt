@@ -30,6 +30,7 @@ import com.fusion.firewall.ui.screens.DashboardScreen
 import com.fusion.firewall.ui.screens.IntelScreen
 import com.fusion.firewall.ui.screens.ListsScreen
 import com.fusion.firewall.ui.screens.SettingsScreen
+import com.fusion.firewall.ui.screens.StatsScreen
 import com.fusion.firewall.ui.screens.TrafficScreen
 
 private enum class Tab(val label: String, val icon: ImageVector) {
@@ -49,6 +50,7 @@ fun FusionRoot(
 ) {
     var tab by remember { mutableStateOf(Tab.DASHBOARD) }
     var showChat by remember { mutableStateOf(false) }
+    var showStats by remember { mutableStateOf(false) }
 
     // Open the chat overlay whenever an "Ask chat" action requests it.
     val openChatRequest by viewModel.openChatRequest.collectAsState()
@@ -82,8 +84,16 @@ fun FusionRoot(
             ChatScreen(viewModel, onClose = { showChat = false }, modifier = content)
             return@Scaffold
         }
+        if (showStats) {
+            StatsScreen(viewModel, onClose = { showStats = false }, modifier = content)
+            return@Scaffold
+        }
         when (tab) {
-            Tab.DASHBOARD -> DashboardScreen(viewModel, onToggleFirewall, content) { tab = Tab.TRAFFIC }
+            Tab.DASHBOARD -> DashboardScreen(
+                viewModel, onToggleFirewall, content,
+                onSeeTraffic = { tab = Tab.TRAFFIC },
+                onOpenStats = { showStats = true },
+            )
             Tab.TRAFFIC -> TrafficScreen(viewModel, content)
             Tab.APPS -> AppsScreen(viewModel, content)
             Tab.LISTS -> ListsScreen(viewModel, content)

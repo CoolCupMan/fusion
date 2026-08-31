@@ -36,6 +36,7 @@ fun DashboardScreen(
     onToggleFirewall: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     onSeeTraffic: () -> Unit,
+    onOpenStats: () -> Unit = {},
 ) {
     val stats by viewModel.stats.collectAsState()
     val events by viewModel.events.collectAsState()
@@ -129,6 +130,9 @@ fun DashboardScreen(
 
         Button(onClick = { viewModel.autoTriageAll() }, modifier = Modifier.fillMaxWidth()) {
             Text("Auto-triage pending apps with BinaryCore")
+        }
+        OutlinedButton(onClick = onOpenStats, modifier = Modifier.fillMaxWidth()) {
+            Text("View stats & charts")
         }
 
         SectionHeader("Blocked apps (${blockedApps.size})")
