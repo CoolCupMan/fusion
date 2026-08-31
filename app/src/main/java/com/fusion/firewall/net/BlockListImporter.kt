@@ -34,15 +34,24 @@ object BlockListImporter {
         for (rawLine in text.lineSequence()) {
             var line = rawLine.trim()
             if (line.isEmpty()) continue
+            // Comments (hosts '#', AdBlock '!') and AdBlock exceptions/regex are skipped.
+            if (line.startsWith("#") || line.startsWith("!") || line.startsWith("@@") || line.startsWith("/")) continue
             val hash = line.indexOf('#')
             if (hash >= 0) line = line.substring(0, hash).trim()
             if (line.isEmpty()) continue
 
-            val tokens = line.split(Regex("\\s+"))
             val candidate = when {
-                tokens.size >= 2 && looksLikeIp(tokens[0]) -> tokens[1]
-                tokens.size == 1 -> tokens[0]
-                else -> continue
+                // AdBlock Plus / AdGuard: ||example.com^ or ||example.com^$third-party
+                line.startsWith("||") -> line.removePrefix("||").substringBefore('^')
+                    .substringBefore('$').substringBefore('/')
+                else -> {
+                    val tokens = line.split(Regex("\\s+"))
+                    when {
+                        tokens.size >= 2 && looksLikeIp(tokens[0]) -> tokens[1]
+                        tokens.size == 1 -> tokens[0]
+                        else -> continue
+                    }
+                }
             }
             val domain = candidate.lowercase().removePrefix("*.").trimEnd('.')
             if (isValidDomain(domain)) out += domain

@@ -37,6 +37,9 @@ class RulesRepository(private val context: Context) {
         val ONLINE_INTEL = booleanPreferencesKey("online_intel")
         val ROOT_MODE = booleanPreferencesKey("root_mode")
         val AUTO_BLOCK_DANGER = booleanPreferencesKey("auto_block_danger")
+        val CHAT_ENDPOINT = stringPreferencesKey("chat_endpoint")
+        val CHAT_KEY = stringPreferencesKey("chat_api_key")
+        val CHAT_MODEL = stringPreferencesKey("chat_model")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -61,6 +64,9 @@ class RulesRepository(private val context: Context) {
             onlineIntelEnabled = prefs[Keys.ONLINE_INTEL] ?: false,
             rootModeEnabled = prefs[Keys.ROOT_MODE] ?: false,
             autoBlockDangerous = prefs[Keys.AUTO_BLOCK_DANGER] ?: false,
+            chatEndpoint = prefs[Keys.CHAT_ENDPOINT] ?: "https://api.anthropic.com/v1/messages",
+            chatApiKey = prefs[Keys.CHAT_KEY] ?: "",
+            chatModel = prefs[Keys.CHAT_MODEL] ?: "claude-opus-5",
         )
     }
 
@@ -130,4 +136,13 @@ class RulesRepository(private val context: Context) {
 
     suspend fun setAutoBlockDangerous(value: Boolean) =
         context.dataStore.edit { it[Keys.AUTO_BLOCK_DANGER] = value }
+
+    suspend fun setChatEndpoint(value: String) =
+        context.dataStore.edit { it[Keys.CHAT_ENDPOINT] = value }
+
+    suspend fun setChatApiKey(value: String) =
+        context.dataStore.edit { it[Keys.CHAT_KEY] = value }
+
+    suspend fun setChatModel(value: String) =
+        context.dataStore.edit { it[Keys.CHAT_MODEL] = value }
 }

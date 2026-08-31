@@ -31,6 +31,10 @@ data class FusionSettings(
     val rootModeEnabled: Boolean = false,
     /** Realtime monitoring auto-blocks apps whose traffic looks dangerous. */
     val autoBlockDangerous: Boolean = false,
+    /** General-purpose AI chat (Claude Messages API). Key is user-supplied. */
+    val chatEndpoint: String = "https://api.anthropic.com/v1/messages",
+    val chatApiKey: String = "",
+    val chatModel: String = "claude-opus-5",
 )
 
 enum class AiMode {

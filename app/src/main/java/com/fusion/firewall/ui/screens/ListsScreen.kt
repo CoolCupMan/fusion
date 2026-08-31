@@ -35,6 +35,7 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     val custom by viewModel.customBlocked.collectAsState()
     val whitelist by viewModel.whitelist.collectAsState()
     val status by viewModel.importStatus.collectAsState()
+    val events by viewModel.events.collectAsState()
 
     var url by remember { mutableStateOf("") }
     var pasted by remember { mutableStateOf("") }
@@ -65,15 +66,32 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
         }
 
         SectionHeader("Recommended")
-        viewModel.recommendedLists.forEach { (name, listUrl) ->
+        viewModel.recommendedLists.forEach { rl ->
+            var expanded by remember { mutableStateOf(false) }
             Card {
-                Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(name, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                    OutlinedButton(onClick = { viewModel.importFromUrl(name, listUrl) }) { Text("Import") }
+                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(rl.name, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide" else "Details") }
+                        OutlinedButton(onClick = { viewModel.importFromUrl(rl.name, rl.url) }) { Text("Import") }
+                    }
+                    if (expanded) {
+                        Text(
+                            rl.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                        Text(
+                            rl.url,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
             }
         }
@@ -119,8 +137,8 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(meta.name, fontWeight = FontWeight.SemiBold)
-                            Text("${meta.count} domains", style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Text("${meta.count} domains · ${meta.source}", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), maxLines = 2)
                         }
                         Switch(checked = meta.enabled, onCheckedChange = { viewModel.setListEnabled(meta.id, it) })
                         TextButton(onClick = { viewModel.removeList(meta.id) }) { Text("Remove") }
@@ -136,6 +154,36 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         } else {
             custom.sorted().forEach { domain -> DomainRow(domain, "Unblock") { viewModel.unblockDomain(domain) } }
+        }
+
+        SectionHeader("Filtered connections")
+        val filtered = remember(events) { events.filter { !it.allowed }.distinctBy { it.hostname }.take(20) }
+        if (filtered.isEmpty()) {
+            Text(
+                "Connections blocked by your lists will show here while protection is on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        } else {
+            filtered.forEach { ev ->
+                Card {
+                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                        Text(ev.hostname ?: "(no name)", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "${ev.appLabel ?: ev.packageName ?: "Unknown"} · ${ev.flagReason ?: "blocked"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                        Row(
+                            Modifier.padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            TextButton(onClick = { ev.hostname?.let { viewModel.unblockDomain(it) } }) { Text("Unblock") }
+                            TextButton(onClick = { viewModel.askAboutDomain(ev.hostname, ev.appLabel) }) { Text("Ask chat") }
+                        }
+                    }
+                }
+            }
         }
 
         SectionHeader("Whitelist (${whitelist.size})")

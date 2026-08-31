@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.fusion.firewall.FusionApp
 import com.fusion.firewall.ai.AppThreat
+import com.fusion.firewall.ai.ChatClient
+import com.fusion.firewall.ai.ChatMessage
 import com.fusion.firewall.ai.ConnectionContext
 import com.fusion.firewall.ai.ThreatAssessment
 import com.fusion.firewall.ai.Verdict
@@ -49,6 +51,9 @@ data class DestinationIntel(
     val intel: com.fusion.firewall.data.model.IpIntel?,
     val assessment: ThreatAssessment?,
 )
+
+/** A curated block list the user can one-tap import, with a description. */
+data class RecommendedList(val name: String, val url: String, val description: String)
 
 /** The result of "ask AI about this blocked app". */
 data class AppIntelReport(
@@ -119,6 +124,11 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         apps.map { list -> list.filter { it.policy == Policy.BLOCK } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Package names currently blocked — for quick per-row lookups in the UI. */
+    val blockedPackages: StateFlow<Set<String>> =
+        apps.map { list -> list.filter { it.policy == Policy.BLOCK }.map { it.packageName }.toSet() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     // --- Connection intelligence ---------------------------------------------
     private val _intel = MutableStateFlow<Map<String, com.fusion.firewall.data.model.IpIntel>>(emptyMap())
     val intel: StateFlow<Map<String, com.fusion.firewall.data.model.IpIntel>> = _intel
@@ -135,6 +145,36 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setAutoBlockDangerous(v: Boolean) = viewModelScope.launch { repo.setAutoBlockDangerous(v) }
+
+    // --- General-purpose AI chat ---------------------------------------------
+    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages
+    private val _chatBusy = MutableStateFlow(false)
+    val chatBusy: StateFlow<Boolean> = _chatBusy
+
+    fun setChatEndpoint(v: String) = viewModelScope.launch { repo.setChatEndpoint(v) }
+    fun setChatApiKey(v: String) = viewModelScope.launch { repo.setChatApiKey(v) }
+    fun setChatModel(v: String) = viewModelScope.launch { repo.setChatModel(v) }
+    fun clearChat() { _chatMessages.value = emptyList() }
+
+    fun sendChat(text: String) {
+        val msg = text.trim()
+        if (msg.isEmpty() || _chatBusy.value) return
+        _chatMessages.value = _chatMessages.value + ChatMessage("user", msg)
+        _chatBusy.value = true
+        viewModelScope.launch {
+            val reply = ChatClient.send(_chatMessages.value, settings.value)
+            _chatMessages.value = _chatMessages.value + ChatMessage("assistant", reply)
+            _chatBusy.value = false
+        }
+    }
+
+    /** Seed the chat with a question about a specific connection/domain. */
+    fun askAboutDomain(domain: String?, app: String?) {
+        val d = domain?.takeIf { it.isNotBlank() } ?: return
+        sendChat("What is the connection to \"$d\"" + (app?.let { " from the app $it" } ?: "") +
+            " used for, and should I block it?")
+    }
 
     // --- Root / deep monitoring ----------------------------------------------
     private val _rootAvailable = MutableStateFlow<Boolean?>(null)
@@ -198,11 +238,42 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     val importStatus: StateFlow<String?> = _importStatus
 
     /** Curated lists the user can import with one tap (downloaded on demand). */
-    val recommendedLists: List<Pair<String, String>> = listOf(
-        "StevenBlack ads + malware" to "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
-        "Peter Lowe ad/tracking" to "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
-        "URLhaus malware" to "https://urlhaus.abuse.ch/downloads/hostfile/",
-        "AdGuard DNS filter" to "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
+    val recommendedLists: List<RecommendedList> = listOf(
+        RecommendedList(
+            "StevenBlack (ads + malware)",
+            "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+            "The popular unified hosts file: consolidates reputable sources to block ads, trackers and malware. A great all-round default.",
+        ),
+        RecommendedList(
+            "HaGeZi Pro",
+            "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/pro.txt",
+            "Balanced pro list blocking ads, affiliate/tracking, metrics and known malicious hosts with low breakage.",
+        ),
+        RecommendedList(
+            "OISD Small",
+            "https://small.oisd.nl/",
+            "Ads and trackers with a strong focus on avoiding false positives — safe for everyday use.",
+        ),
+        RecommendedList(
+            "1Hosts (Lite)",
+            "https://raw.githubusercontent.com/badmojr/1Hosts/master/Lite/hosts.txt",
+            "A lightweight, balanced ad/tracker list that rarely breaks sites.",
+        ),
+        RecommendedList(
+            "AdGuard DNS filter",
+            "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
+            "AdGuard's own DNS filter targeting ads and trackers across apps and sites.",
+        ),
+        RecommendedList(
+            "Peter Lowe (ad/tracking)",
+            "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
+            "Long-maintained list of ad and tracking servers.",
+        ),
+        RecommendedList(
+            "URLhaus (malware)",
+            "https://urlhaus.abuse.ch/downloads/hostfile/",
+            "abuse.ch feed of hosts actively distributing malware. Security-focused; pairs well with an ad list.",
+        ),
     )
 
     fun activeBlockedDomainCount(): Int = container.domainBlocker.blockedDomainCount

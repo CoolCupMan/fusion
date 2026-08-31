@@ -44,6 +44,8 @@ fun SettingsScreen(
     var apiKey by remember(settings.binaryCoreApiKey) { mutableStateOf(settings.binaryCoreApiKey) }
     var intelEndpoint by remember(settings.ipIntelEndpoint) { mutableStateOf(settings.ipIntelEndpoint) }
     var intelKey by remember(settings.ipIntelApiKey) { mutableStateOf(settings.ipIntelApiKey) }
+    var chatKey by remember(settings.chatApiKey) { mutableStateOf(settings.chatApiKey) }
+    var chatModel by remember(settings.chatModel) { mutableStateOf(settings.chatModel) }
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -144,6 +146,30 @@ fun SettingsScreen(
                 "processes and services directly. Fusion never roots or flashes the device.",
             checked = settings.rootModeEnabled,
             onChange = { viewModel.setRootMode(it) },
+        )
+
+        SectionHeader("AI chat (Claude)")
+        Text(
+            "Powers the chat assistant (the message button). Paste your Anthropic API key; " +
+                "it is stored only on this device and sent directly to the Claude API.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        )
+        OutlinedTextField(
+            value = chatKey,
+            onValueChange = { chatKey = it; viewModel.setChatApiKey(it) },
+            label = { Text("Claude API key (sk-ant-…)") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = chatModel,
+            onValueChange = { chatModel = it; viewModel.setChatModel(it) },
+            label = { Text("Model") },
+            placeholder = { Text("claude-opus-5") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
         )
 
         SectionHeader("Permissions")

@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +37,7 @@ import com.fusion.firewall.data.model.Policy
 import com.fusion.firewall.ui.AppIntelReport
 import com.fusion.firewall.ui.DestinationIntel
 import com.fusion.firewall.ui.FusionViewModel
+import com.fusion.firewall.ui.PolicySelector
 import com.fusion.firewall.ui.SectionHeader
 import com.fusion.firewall.ui.VerdictBadge
 
@@ -50,6 +52,8 @@ fun IntelScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     val events by viewModel.events.collectAsState()
     val verdicts by viewModel.assessments.collectAsState()
     val threats by viewModel.appThreats.collectAsState()
+    val apps by viewModel.apps.collectAsState()
+    val policyByPkg = remember(apps) { apps.associate { it.packageName to it.policy } }
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -87,7 +91,7 @@ fun IntelScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        AppThreatSection(threats, settings.autoBlockDangerous, viewModel)
+        AppThreatSection(threats, settings.autoBlockDangerous, policyByPkg, viewModel)
 
         RecommendedActions(events, verdicts, viewModel)
 
@@ -241,6 +245,7 @@ private fun RootSection(
 private fun AppThreatSection(
     threats: List<AppThreat>,
     autoBlock: Boolean,
+    policyByPkg: Map<String, Policy>,
     viewModel: FusionViewModel,
 ) {
     SectionHeader("Dangerous app analysis")
@@ -281,12 +286,14 @@ private fun AppThreatSection(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         )
     } else {
-        flagged.forEach { t -> ThreatCard(t, viewModel) }
+        flagged.forEach { t ->
+            ThreatCard(t, policyByPkg[t.packageName] ?: Policy.PENDING, viewModel)
+        }
     }
 }
 
 @Composable
-private fun ThreatCard(t: AppThreat, viewModel: FusionViewModel) {
+private fun ThreatCard(t: AppThreat, policy: Policy, viewModel: FusionViewModel) {
     Card {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
             Row(
@@ -308,18 +315,21 @@ private fun ThreatCard(t: AppThreat, viewModel: FusionViewModel) {
                 Text("• $it", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 2.dp))
             }
             Text(
-                "${t.totalLookups} domains · ${t.blockedLookups} blocked",
+                if (policy == Policy.BLOCK) "Blocked" else if (policy == Policy.ALLOW) "Allowed" else "Not decided",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                modifier = Modifier.padding(top = 4.dp),
+                fontWeight = FontWeight.SemiBold,
+                color = when (policy) {
+                    Policy.BLOCK -> MaterialTheme.colorScheme.error
+                    Policy.ALLOW -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                },
+                modifier = Modifier.padding(top = 6.dp),
             )
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                AssistChip(onClick = { viewModel.setPolicy(t.packageName, Policy.BLOCK) }, label = { Text("Block app") })
-                AssistChip(onClick = { viewModel.setPolicy(t.packageName, Policy.ALLOW) }, label = { Text("Allow") })
-            }
+            PolicySelector(
+                current = policy,
+                onSelect = { viewModel.setPolicy(t.packageName, it) },
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }
