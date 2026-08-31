@@ -322,6 +322,20 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun activeBlockedDomainCount(): Int = container.domainBlocker.blockedDomainCount
 
+    /** Searchable, embedded catalog of well-known block lists. */
+    val listCatalog: List<com.fusion.firewall.data.CatalogList> = com.fusion.firewall.data.ListCatalog.entries
+
+    fun searchCatalog(query: String): List<com.fusion.firewall.data.CatalogList> {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) return listCatalog
+        return listCatalog.filter {
+            it.name.lowercase().contains(q) ||
+                it.category.lowercase().contains(q) ||
+                it.description.lowercase().contains(q) ||
+                it.format.lowercase().contains(q)
+        }
+    }
+
     /** Block a single domain instantly (adds to the custom list). */
     fun blockDomain(domain: String?) {
         val d = domain?.trim().orEmpty()

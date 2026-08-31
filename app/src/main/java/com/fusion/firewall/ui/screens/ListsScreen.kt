@@ -1,5 +1,8 @@
 package com.fusion.firewall.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,8 +27,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.fusion.firewall.data.CatalogList
 import com.fusion.firewall.ui.FusionViewModel
 import com.fusion.firewall.ui.SectionHeader
 
@@ -40,6 +46,16 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     var url by remember { mutableStateOf("") }
     var pasted by remember { mutableStateOf("") }
     var whiteEntry by remember { mutableStateOf("") }
+    var catalogQuery by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    fun openUrl(link: String) {
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+    }
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -86,10 +102,13 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                             modifier = Modifier.padding(top = 6.dp),
                         )
                         Text(
-                            rl.url,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                            modifier = Modifier.padding(top = 4.dp),
+                            "Open list source ↗",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            textDecoration = TextDecoration.Underline,
+                            modifier = Modifier
+                                .padding(top = 6.dp)
+                                .clickable { openUrl(rl.url) },
                         )
                     }
                 }
@@ -122,6 +141,32 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
             enabled = pasted.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Import pasted") }
+
+        SectionHeader("Find lists")
+        Text(
+            "Search a catalog of well-known block-list repos and import with one tap. " +
+                "Tap Website to read what a list does. Supported formats: hosts files, " +
+                "AdBlock syntax (||domain^) and plain domain lists.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+        OutlinedTextField(
+            value = catalogQuery,
+            onValueChange = { catalogQuery = it },
+            label = { Text("Search lists (ads, malware, phishing, tracking…)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        val catalogResults = remember(catalogQuery) { viewModel.searchCatalog(catalogQuery) }
+        if (catalogResults.isEmpty()) {
+            Text(
+                "No catalog lists match \"$catalogQuery\". You can still paste a URL above.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        } else {
+            catalogResults.forEach { c -> CatalogCard(c, onImport = { viewModel.importFromUrl(c.name, c.listUrl) }, onWebsite = { openUrl(c.homepage) }) }
+        }
 
         SectionHeader("Active lists (${lists.size})")
         if (lists.isEmpty()) {
@@ -157,6 +202,14 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
         }
 
         SectionHeader("Filtered connections")
+        Text(
+            "These are DNS lookups Fusion actually blocked while protection was on — each " +
+                "row is a domain an app tried to reach that matched an enabled block list, your " +
+                "custom blocks, or belongs to an app you blocked. \"Unblock\" whitelists the " +
+                "domain so it's allowed from now on; \"Ask chat\" explains what it is.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
         val filtered = remember(events) { events.filter { !it.allowed }.distinctBy { it.hostname }.take(20) }
         if (filtered.isEmpty()) {
             Text(
@@ -206,6 +259,33 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
             ) { Text("Add") }
         }
         whitelist.sorted().forEach { domain -> DomainRow(domain, "Remove") { viewModel.removeWhitelist(domain) } }
+    }
+}
+
+@Composable
+private fun CatalogCard(c: CatalogList, onImport: () -> Unit, onWebsite: () -> Unit) {
+    Card {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Text(c.name, fontWeight = FontWeight.SemiBold)
+            Text(
+                "${c.category} · ${c.format}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+            Text(
+                c.description,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onWebsite) { Text("Website ↗") }
+                OutlinedButton(onClick = onImport) { Text("Import") }
+            }
+        }
     }
 }
 

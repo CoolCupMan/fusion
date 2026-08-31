@@ -1,0 +1,102 @@
+package com.fusion.firewall.data
+
+/** A block list in the built-in catalog: what it is, where it lives, and its format. */
+data class CatalogList(
+    val name: String,
+    val category: String,
+    val format: String,      // hosts | abp | plain
+    val description: String,
+    val listUrl: String,     // the raw list to import
+    val homepage: String,    // the project/website to read about it
+)
+
+/**
+ * A curated, embedded catalog of well-known DNS block lists spanning the common
+ * supported document formats (hosts files, AdBlock-Plus syntax, plain domain
+ * lists). The user can search this catalog and import any entry, or open its
+ * website. Fusion's importer normalizes all three formats to domains.
+ */
+object ListCatalog {
+    val entries: List<CatalogList> = listOf(
+        CatalogList("StevenBlack — Unified", "Ads + Malware", "hosts",
+            "The most popular unified hosts file; consolidates trusted sources. Great default.",
+            "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+            "https://github.com/StevenBlack/hosts"),
+        CatalogList("HaGeZi — Multi PRO", "Ads/Tracking/Malware", "hosts",
+            "Balanced pro list: ads, affiliate/tracking, metrics and malicious hosts, low breakage.",
+            "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/pro.txt",
+            "https://github.com/hagezi/dns-blocklists"),
+        CatalogList("HaGeZi — Ultimate", "Aggressive", "hosts",
+            "Maximum protection HaGeZi list; blocks more, may need occasional whitelisting.",
+            "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/ultimate.txt",
+            "https://github.com/hagezi/dns-blocklists"),
+        CatalogList("HaGeZi — Threat Intelligence", "Malware/Phishing", "hosts",
+            "Threat-intelligence feed: malware, phishing, cryptojacking and scam domains.",
+            "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/tif.txt",
+            "https://github.com/hagezi/dns-blocklists"),
+        CatalogList("OISD — Small", "Ads + Trackers", "abp",
+            "Ads and trackers with a strong focus on avoiding false positives. Everyday-safe.",
+            "https://small.oisd.nl/",
+            "https://oisd.nl"),
+        CatalogList("OISD — Big", "Ads/Trackers/Malware", "abp",
+            "Larger OISD list adding malware, phishing and more, still low false positives.",
+            "https://big.oisd.nl/",
+            "https://oisd.nl"),
+        CatalogList("1Hosts — Lite", "Ads + Trackers", "hosts",
+            "Lightweight, balanced ad/tracker list that rarely breaks sites.",
+            "https://raw.githubusercontent.com/badmojr/1Hosts/master/Lite/hosts.txt",
+            "https://github.com/badmojr/1Hosts"),
+        CatalogList("1Hosts — Pro", "Ads/Tracking/Malware", "hosts",
+            "Stronger 1Hosts variant covering trackers, telemetry and malicious hosts.",
+            "https://raw.githubusercontent.com/badmojr/1Hosts/master/Pro/hosts.txt",
+            "https://github.com/badmojr/1Hosts"),
+        CatalogList("AdGuard DNS filter", "Ads + Trackers", "abp",
+            "AdGuard's own DNS filter targeting ads and trackers across apps and sites.",
+            "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
+            "https://github.com/AdguardTeam/AdGuardSDNSFilter"),
+        CatalogList("AdAway", "Mobile Ads", "hosts",
+            "Classic mobile-focused ad hosts used by the AdAway project.",
+            "https://adaway.org/hosts.txt",
+            "https://adaway.org"),
+        CatalogList("Peter Lowe", "Ads + Tracking", "hosts",
+            "Long-maintained list of ad and tracking servers.",
+            "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
+            "https://pgl.yoyo.org/adservers/"),
+        CatalogList("Dan Pollock (someonewhocares)", "Ads + Tracking", "hosts",
+            "A hand-curated hosts file blocking ads, trackers and bad actors.",
+            "https://someonewhocares.org/hosts/zero/hosts",
+            "https://someonewhocares.org/hosts/"),
+        CatalogList("MVPS hosts", "Ads + Tracking", "hosts",
+            "Well-known long-standing hosts file for ad and tracker blocking.",
+            "https://winhelp2002.mvps.org/hosts.txt",
+            "https://winhelp2002.mvps.org/hosts.htm"),
+        CatalogList("URLhaus (abuse.ch)", "Malware", "hosts",
+            "abuse.ch feed of hosts actively distributing malware. Security-focused.",
+            "https://urlhaus.abuse.ch/downloads/hostfile/",
+            "https://urlhaus.abuse.ch"),
+        CatalogList("Phishing Army — Extended", "Phishing", "plain",
+            "Domains involved in phishing campaigns; pair with an ads list.",
+            "https://phishing.army/download/phishing_army_blocklist_extended.txt",
+            "https://phishing.army"),
+        CatalogList("anudeepND — Adservers", "Ads", "hosts",
+            "Compact, well-tested adservers list with minimal breakage.",
+            "https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt",
+            "https://github.com/anudeepND/blacklist"),
+        CatalogList("Lightswitch05 — Ads & Tracking", "Ads + Tracking", "hosts",
+            "Actively updated ads-and-tracking extended hosts file.",
+            "https://raw.githubusercontent.com/lightswitch05/hosts/master/docs/lists/ads-and-tracking-extended.txt",
+            "https://github.com/lightswitch05/hosts"),
+        CatalogList("WindowsSpyBlocker — Spy", "Telemetry", "hosts",
+            "Blocks Windows/OS telemetry and spying endpoints.",
+            "https://raw.githubusercontent.com/crazy-max/WindowsSpyBlocker/master/data/hosts/spy.txt",
+            "https://github.com/crazy-max/WindowsSpyBlocker"),
+        CatalogList("Frellwit — Swedish Hosts", "Regional (SE)", "hosts",
+            "Regional list targeting Swedish ad/tracking/scam hosts.",
+            "https://raw.githubusercontent.com/lassekongo83/Frellwits-filter-lists/master/Frellwits-Swedish-Hosts-File.txt",
+            "https://github.com/lassekongo83/Frellwits-filter-lists"),
+        CatalogList("KADhosts", "Ads/Scam (PL)", "hosts",
+            "Polish-maintained list against ads, tracking, scam and fraud.",
+            "https://raw.githubusercontent.com/FilterLists/KADhosts/master/KADhosts.txt",
+            "https://kadantiscam.netlify.app"),
+    )
+}
