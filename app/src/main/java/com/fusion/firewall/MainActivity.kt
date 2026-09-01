@@ -24,6 +24,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // If the previous run crashed, show the captured trace instead of
+        // relaunching the same UI and closing instantly again.
+        val crash = com.fusion.firewall.data.CrashLog.read(this)
+        if (crash != null) {
+            setContent { FusionTheme { CrashScreen(crash) } }
+            return
+        }
+
         maybeRequestNotifications()
 
         setContent {
@@ -31,6 +40,20 @@ class MainActivity : ComponentActivity() {
                 FusionScreen(viewModel)
             }
         }
+    }
+
+    @Composable
+    private fun CrashScreen(trace: String) {
+        com.fusion.firewall.ui.CrashReport(
+            trace = trace,
+            onCopyToDownloads = {
+                com.fusion.firewall.data.CrashLog.exportToDownloads(this, trace)
+            },
+            onContinue = {
+                com.fusion.firewall.data.CrashLog.clear(this)
+                restartApp()
+            },
+        )
     }
 
     @Composable

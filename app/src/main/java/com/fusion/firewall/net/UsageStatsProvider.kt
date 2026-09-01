@@ -73,6 +73,9 @@ class UsageStatsProvider(private val context: Context) {
             }
         } catch (_: RemoteException) {
         } catch (_: SecurityException) {
+        } catch (_: Exception) {
+            // Some OEM builds (e.g. certain MediaTek ROMs) throw unchecked
+            // exceptions from querySummary; treat as "no usage data".
         }
     }
 }

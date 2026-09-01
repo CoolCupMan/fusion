@@ -3,17 +3,26 @@ package com.fusion.firewall.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -85,6 +94,48 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier) {
         fontWeight = FontWeight.Bold,
         modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
     )
+}
+
+/**
+ * Safe-mode screen shown when the previous launch crashed. Displays the captured
+ * trace (so it can be screenshotted or copied to Download/Fusion) and offers to
+ * try starting normally again.
+ */
+@Composable
+fun CrashReport(
+    trace: String,
+    onCopyToDownloads: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    var copied by remember { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Fusion stopped unexpectedly", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(
+            "The last start failed. The details below are also saved to " +
+                "Download/Fusion/fusion-crash.txt — open that with any file manager and send it " +
+                "so it can be fixed. Tap Try again to restart normally.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onContinue, modifier = Modifier.weight(1f)) { Text("Try again") }
+            OutlinedButton(
+                onClick = { onCopyToDownloads(); copied = true },
+                modifier = Modifier.weight(1f),
+            ) { Text(if (copied) "Saved ✓" else "Save report") }
+        }
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Text(
+                trace,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Normal,
+                modifier = Modifier.padding(12.dp),
+            )
+        }
+    }
 }
 
 fun formatBytes(bytes: Long): String {

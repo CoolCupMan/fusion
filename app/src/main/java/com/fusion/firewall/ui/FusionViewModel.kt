@@ -141,7 +141,9 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     val appThreats: StateFlow<List<AppThreat>> = _appThreats
 
     fun analyzeApps() = viewModelScope.launch(Dispatchers.IO) {
-        _appThreats.value = container.threatAnalyzer.analyze(events.value, installedApps.value, settings.value)
+        runCatching {
+            _appThreats.value = container.threatAnalyzer.analyze(events.value, installedApps.value, settings.value)
+        }
     }
 
     fun setAutoBlockDangerous(v: Boolean) = viewModelScope.launch { repo.setAutoBlockDangerous(v) }
@@ -303,7 +305,7 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         refreshSnapshots()
         viewModelScope.launch {
             while (true) {
-                refreshUsage()
+                runCatching { refreshUsage() }
                 analyzeApps()
                 delay(15_000)
             }
@@ -311,7 +313,7 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refreshApps() = viewModelScope.launch(Dispatchers.IO) {
-        installedApps.value = container.appInfo.loadAll()
+        runCatching { installedApps.value = container.appInfo.loadAll() }
     }
 
     private suspend fun refreshUsage() = withContext(Dispatchers.IO) {
@@ -421,7 +423,7 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     fun clearStorageStatus() { _storageStatus.value = null }
 
     fun refreshSnapshots() = viewModelScope.launch {
-        _snapshots.value = container.snapshots.list()
+        runCatching { _snapshots.value = container.snapshots.list() }
     }
 
     /** Save the current blocked/unblocked apps & traffic to storage + phone storage. */

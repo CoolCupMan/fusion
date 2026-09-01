@@ -2,6 +2,7 @@ package com.fusion.firewall
 
 import android.app.Application
 import com.fusion.firewall.ai.AppThreatAnalyzer
+import com.fusion.firewall.data.CrashLog
 import com.fusion.firewall.ai.BinaryCoreManager
 import com.fusion.firewall.data.BlockListRepository
 import com.fusion.firewall.data.RulesRepository
@@ -34,6 +35,12 @@ class FusionApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Install first so even a failure while wiring the container is captured.
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching { CrashLog.save(this, throwable) }
+            previous?.uncaughtException(thread, throwable)
+        }
         container = AppContainer(this)
     }
 }
