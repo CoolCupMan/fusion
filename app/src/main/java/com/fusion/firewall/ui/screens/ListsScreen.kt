@@ -46,7 +46,9 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
     var url by remember { mutableStateOf("") }
     var pasted by remember { mutableStateOf("") }
     var whiteEntry by remember { mutableStateOf("") }
+    var blackEntry by remember { mutableStateOf("") }
     var catalogQuery by remember { mutableStateOf("") }
+    var showWebsiteCats by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     fun openUrl(link: String) {
@@ -110,6 +112,50 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
                                 .padding(top = 6.dp)
                                 .clickable { openUrl(rl.url) },
                         )
+                    }
+                }
+            }
+        }
+
+        SectionHeader("Website category blacklists")
+        Text(
+            "Block whole categories of websites with one tap. Each is a public, curated list " +
+                "of sites in that category; Import enables it for every app.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+        OutlinedButton(
+            onClick = { showWebsiteCats = !showWebsiteCats },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (showWebsiteCats) "Hide website categories ▲" else "Show website categories ▾") }
+        if (showWebsiteCats) {
+            viewModel.websiteBlacklists.forEach { rl ->
+                var expanded by remember { mutableStateOf(false) }
+                Card {
+                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(rl.name, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                            TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide" else "Details") }
+                            Button(onClick = { viewModel.importFromUrl(rl.name, rl.url) }) { Text("Import") }
+                        }
+                        if (expanded) {
+                            Text(
+                                rl.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                            Text(
+                                "Open list source ↗",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                textDecoration = TextDecoration.Underline,
+                                modifier = Modifier.padding(top = 6.dp).clickable { openUrl(rl.url) },
+                            )
+                        }
                     }
                 }
             }
@@ -193,8 +239,26 @@ fun ListsScreen(viewModel: FusionViewModel, modifier: Modifier = Modifier) {
         }
 
         SectionHeader("Custom blocked (${custom.size})")
+        Text(
+            "Your manual blacklist — type any domain to block it for every app instantly.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = blackEntry,
+                onValueChange = { blackEntry = it },
+                label = { Text("Block domain (e.g. ads.example.com)") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = { viewModel.blockDomain(blackEntry.trim()); blackEntry = "" },
+                enabled = blackEntry.isNotBlank(),
+            ) { Text("Block") }
+        }
         if (custom.isEmpty()) {
-            Text("Block a domain from the Traffic tab to add it here.",
+            Text("No manually blocked domains yet. Add one above, or block from the Traffic tab.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         } else {

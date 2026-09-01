@@ -580,6 +580,52 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
         ),
     )
 
+    /**
+     * Curated "whole website category" blacklists. Each is a public, community-
+     * maintained hosts list; importing one enables it as an active block list so
+     * every matching site is sinkholed for all apps. The first entry blocks
+     * publicly-reachable pornography/adult sites.
+     */
+    val websiteBlacklists: List<RecommendedList> = listOf(
+        RecommendedList(
+            "All porn / adult sites",
+            "https://raw.githubusercontent.com/blocklistproject/Lists/master/porn.txt",
+            "Blocks publicly-reachable pornography and adult websites — a large, community-" +
+                "maintained hosts list of known adult domains (tens of thousands of sites). " +
+                "Enable it and every app is stopped from resolving those domains.",
+        ),
+        RecommendedList(
+            "Gambling & betting sites",
+            "https://raw.githubusercontent.com/blocklistproject/Lists/master/gambling.txt",
+            "Online casinos, betting and gambling websites.",
+        ),
+        RecommendedList(
+            "Drugs",
+            "https://raw.githubusercontent.com/blocklistproject/Lists/master/drugs.txt",
+            "Sites selling or promoting recreational drugs.",
+        ),
+        RecommendedList(
+            "Piracy & torrent sites",
+            "https://raw.githubusercontent.com/blocklistproject/Lists/master/piracy.txt",
+            "Torrent trackers and piracy/warez sites.",
+        ),
+        RecommendedList(
+            "Scam & fraud sites",
+            "https://raw.githubusercontent.com/blocklistproject/Lists/master/scam.txt",
+            "Known scam, fraud and deceptive websites.",
+        ),
+        RecommendedList(
+            "Facebook & Instagram",
+            "https://raw.githubusercontent.com/blocklistproject/Lists/master/facebook.txt",
+            "Facebook and Instagram domains — blocks the sites and their embeds/trackers.",
+        ),
+        RecommendedList(
+            "TikTok",
+            "https://raw.githubusercontent.com/blocklistproject/Lists/master/tiktok.txt",
+            "TikTok domains across apps and the web.",
+        ),
+    )
+
     fun activeBlockedDomainCount(): Int = container.domainBlocker.blockedDomainCount
 
     /** Searchable, embedded catalog of well-known block lists. */
