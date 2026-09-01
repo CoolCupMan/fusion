@@ -80,6 +80,10 @@ class BlockListRepository(private val context: Context) {
     suspend fun addWhitelist(domain: String) = mutateSet(Keys.WHITELIST) { it + normalize(domain) }
     suspend fun removeWhitelist(domain: String) = mutateSet(Keys.WHITELIST) { it - normalize(domain) }
 
+    /** Overwrite the custom blocked / whitelist sets wholesale (snapshot restore). */
+    suspend fun replaceCustom(domains: Set<String>) = mutateSet(Keys.CUSTOM) { domains }
+    suspend fun replaceWhitelist(domains: Set<String>) = mutateSet(Keys.WHITELIST) { domains }
+
     private suspend fun mutateSet(key: Preferences.Key<String>, transform: (Set<String>) -> Set<String>) {
         context.blockListStore.edit { prefs ->
             val current = decodeSet(prefs[key])

@@ -40,6 +40,9 @@ class MainActivity : ComponentActivity() {
         ) { result ->
             if (result.resultCode == RESULT_OK) FusionVpnService.start(this)
         }
+        val importLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri -> if (uri != null) viewModel.importSnapshot(uri) }
 
         FusionRoot(
             viewModel = viewModel,
@@ -57,7 +60,28 @@ class MainActivity : ComponentActivity() {
                     startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))
                 }
             },
+            onImportSnapshot = {
+                runCatching { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }
+            },
+            onRestartApp = { restartApp() },
         )
+    }
+
+    /**
+     * Cold-restart Fusion as if launched from scratch after a reboot: stop the
+     * tunnel, wipe the live drop log so counters start at zero, then relaunch the
+     * launcher activity in a fresh task and kill this process so
+     * [FusionApp.onCreate] re-initializes everything from first boot.
+     */
+    private fun restartApp() {
+        runCatching { FusionVpnService.stop(this) }
+        com.fusion.firewall.data.ConnectionLog.clear()
+        val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        }
+        runCatching { startActivity(intent) }
+        finishAffinity()
+        Runtime.getRuntime().exit(0)
     }
 
     private fun maybeRequestNotifications() {

@@ -110,6 +110,14 @@ class RulesRepository(private val context: Context) {
         }
     }
 
+    /** Replace every per-app rule at once (used when restoring a saved snapshot). */
+    suspend fun replaceAll(rules: Map<String, Policy>) {
+        context.dataStore.edit { prefs ->
+            val clean = rules.filterValues { it != Policy.PENDING }
+            prefs[Keys.RULES] = json.encodeToString(clean.mapValues { it.value.name })
+        }
+    }
+
     suspend fun setFirewallEnabled(enabled: Boolean) =
         context.dataStore.edit { it[Keys.FIREWALL_ENABLED] = enabled }
 

@@ -300,6 +300,7 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         refreshApps()
+        refreshSnapshots()
         viewModelScope.launch {
             while (true) {
                 refreshUsage()
@@ -410,6 +411,98 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
     fun setRootMode(v: Boolean) = viewModelScope.launch { repo.setRootMode(v) }
 
     fun clearLog() = ConnectionLog.clear()
+
+    // --- Storage manager: save/load "sets of instructions" -------------------
+    private val _snapshots = MutableStateFlow<List<com.fusion.firewall.data.SnapshotMeta>>(emptyList())
+    val snapshots: StateFlow<List<com.fusion.firewall.data.SnapshotMeta>> = _snapshots
+
+    private val _storageStatus = MutableStateFlow<String?>(null)
+    val storageStatus: StateFlow<String?> = _storageStatus
+    fun clearStorageStatus() { _storageStatus.value = null }
+
+    fun refreshSnapshots() = viewModelScope.launch {
+        _snapshots.value = container.snapshots.list()
+    }
+
+    /** Save the current blocked/unblocked apps & traffic to storage + phone storage. */
+    fun saveSnapshot() = viewModelScope.launch {
+        val snap = buildSnapshot()
+        container.snapshots.saveInternal(snap)
+        val path = container.snapshots.exportToPhoneStorage(snap)
+        refreshSnapshots()
+        _storageStatus.value = if (path != null)
+            "Saved. On this phone at: $path — open with any file manager."
+        else "Saved to app storage. Couldn't write to shared storage."
+    }
+
+    /** Reload the most recent saved set of instructions. */
+    fun loadLastSnapshot() = viewModelScope.launch {
+        val snap = container.snapshots.latest()
+        if (snap == null) { _storageStatus.value = "No saved snapshots yet."; return@launch }
+        applySnapshot(snap)
+        _storageStatus.value = "Loaded last snapshot (${dateOf(snap.savedAt)}). Rules & lists restored."
+    }
+
+    fun loadSnapshot(fileName: String) = viewModelScope.launch {
+        val snap = container.snapshots.load(fileName)
+        if (snap == null) { _storageStatus.value = "Couldn't read that snapshot."; return@launch }
+        applySnapshot(snap)
+        _storageStatus.value = "Loaded snapshot from ${dateOf(snap.savedAt)}. Rules & lists restored."
+    }
+
+    fun deleteSnapshot(fileName: String) = viewModelScope.launch {
+        container.snapshots.delete(fileName)
+        refreshSnapshots()
+        _storageStatus.value = "Snapshot deleted."
+    }
+
+    /** Import a snapshot the user picked from a file manager, then load it. */
+    fun importSnapshot(uri: android.net.Uri) = viewModelScope.launch {
+        val snap = container.snapshots.readUri(uri)
+        if (snap == null) { _storageStatus.value = "That file isn't a Fusion snapshot."; return@launch }
+        container.snapshots.saveInternal(snap)
+        applySnapshot(snap)
+        refreshSnapshots()
+        _storageStatus.value = "Imported & loaded snapshot from ${dateOf(snap.savedAt)}."
+    }
+
+    private fun buildSnapshot(): com.fusion.firewall.data.FusionSnapshot {
+        val appList = apps.value
+        val custom = customBlocked.value
+        val white = whitelist.value
+        val bp = blockedPackages.value
+        val ev = events.value
+        fun blocked(e: ConnectionEvent): Boolean {
+            val h = e.hostname
+            if (h != null && h in white) return false
+            return !e.allowed || (e.packageName != null && e.packageName in bp) || (h != null && h in custom)
+        }
+        return com.fusion.firewall.data.FusionSnapshot(
+            savedAt = System.currentTimeMillis(),
+            appVersion = com.fusion.firewall.BuildConfig.VERSION_NAME,
+            blockedApps = appList.filter { it.policy == Policy.BLOCK }.map { it.packageName },
+            allowedApps = appList.filter { it.policy == Policy.ALLOW }.map { it.packageName },
+            customBlockedDomains = custom.toList(),
+            whitelistDomains = white.toList(),
+            importedLists = blockLists.value,
+            trafficBlocked = ev.filter { blocked(it) }.mapNotNull { it.hostname }.filter { it.isNotBlank() }.distinct(),
+            trafficAllowed = ev.filter { !blocked(it) }.mapNotNull { it.hostname }.filter { it.isNotBlank() }.distinct(),
+            droppedCount = stats.value.droppedConnections,
+            allowedCount = stats.value.allowed,
+        )
+    }
+
+    private suspend fun applySnapshot(s: com.fusion.firewall.data.FusionSnapshot) {
+        val map = HashMap<String, Policy>()
+        s.allowedApps.forEach { map[it] = Policy.ALLOW }
+        s.blockedApps.forEach { map[it] = Policy.BLOCK }
+        repo.replaceAll(map)
+        container.blockLists.replaceCustom((s.customBlockedDomains + s.trafficBlocked).toSet())
+        container.blockLists.replaceWhitelist(s.whitelistDomains.toSet())
+    }
+
+    private fun dateOf(t: Long): String =
+        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(t))
 
     private val _actionStatus = MutableStateFlow<String?>(null)
     val actionStatus: StateFlow<String?> = _actionStatus

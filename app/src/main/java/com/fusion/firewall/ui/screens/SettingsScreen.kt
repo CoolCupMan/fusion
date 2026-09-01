@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -15,6 +18,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +43,8 @@ fun SettingsScreen(
     viewModel: FusionViewModel,
     onOpenUsageAccessSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onImportSnapshot: () -> Unit = {},
+    onRestartApp: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsState()
     var endpoint by remember(settings.binaryCoreEndpoint) { mutableStateOf(settings.binaryCoreEndpoint) }
@@ -245,6 +251,109 @@ fun SettingsScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 ) { Text("Open usage access settings") }
             }
+        }
+
+        SectionHeader("Storage & snapshots")
+        val snapshots by viewModel.snapshots.collectAsState()
+        val storageStatus by viewModel.storageStatus.collectAsState()
+        Text(
+            "Save the current set of instructions — which apps and traffic are blocked or " +
+                "allowed. Each save is kept in the app for instant reload and also written to " +
+                "Download/Fusion on your phone, where Files, BD File Manager, Dateimanager+, " +
+                "Amaze and other file managers can open it. Loading a snapshot restores those " +
+                "rules and lists immediately.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { viewModel.saveSnapshot() }, modifier = Modifier.weight(1f)) {
+                Text("Save now")
+            }
+            OutlinedButton(onClick = { viewModel.loadLastSnapshot() }, modifier = Modifier.weight(1f)) {
+                Text("Load last")
+            }
+        }
+        OutlinedButton(onClick = onImportSnapshot, modifier = Modifier.fillMaxWidth()) {
+            Text("Import snapshot from file…")
+        }
+        storageStatus?.let { msg ->
+            Card {
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(msg, style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { viewModel.clearStorageStatus() }) { Text("OK") }
+                }
+            }
+        }
+        if (snapshots.isEmpty()) {
+            Text(
+                "No saved snapshots yet.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        } else {
+            snapshots.forEach { snap ->
+                Card {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(snap.label, fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "${snap.blockedApps} blocked app(s) · ${snap.blockedDomains} blocked " +
+                                    "domain(s) · ${snap.allowedDomains} allowed",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                        }
+                        TextButton(onClick = { viewModel.loadSnapshot(snap.fileName) }) { Text("Load") }
+                        TextButton(onClick = { viewModel.deleteSnapshot(snap.fileName) }) {
+                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+        }
+
+        SectionHeader("Restart")
+        var confirmRestart by remember { mutableStateOf(false) }
+        Text(
+            "Restart Fusion from scratch — as if you had just relaunched it after a reboot. " +
+                "The tunnel stops, the live drop counters reset to zero for a new generation of " +
+                "drops, and the app re-initializes from first boot. Your saved rules, lists and " +
+                "snapshots are kept.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        )
+        Button(
+            onClick = { confirmRestart = true },
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Restart Fusion") }
+        if (confirmRestart) {
+            AlertDialog(
+                onDismissRequest = { confirmRestart = false },
+                title = { Text("Restart Fusion?") },
+                text = {
+                    Text(
+                        "Fusion will close and reopen from scratch. Protection turns off and live " +
+                            "counters reset to zero. Saved rules, lists and snapshots are kept."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { confirmRestart = false; onRestartApp() }) { Text("Restart") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmRestart = false }) { Text("Cancel") }
+                },
+            )
         }
 
         SectionHeader("About")

@@ -47,6 +47,8 @@ fun FusionRoot(
     viewModel: FusionViewModel,
     onToggleFirewall: (Boolean) -> Unit,
     onOpenUsageAccessSettings: () -> Unit,
+    onImportSnapshot: () -> Unit = {},
+    onRestartApp: () -> Unit = {},
 ) {
     var tab by remember { mutableStateOf(Tab.DASHBOARD) }
     var showChat by remember { mutableStateOf(false) }
@@ -101,7 +103,11 @@ fun FusionRoot(
             Tab.APPS -> AppsScreen(viewModel, content)
             Tab.LISTS -> ListsScreen(viewModel, content)
             Tab.INTEL -> IntelScreen(viewModel, content)
-            Tab.SETTINGS -> SettingsScreen(viewModel, onOpenUsageAccessSettings, content)
+            Tab.SETTINGS -> SettingsScreen(
+                viewModel, onOpenUsageAccessSettings, content,
+                onImportSnapshot = onImportSnapshot,
+                onRestartApp = onRestartApp,
+            )
         }
     }
 }
