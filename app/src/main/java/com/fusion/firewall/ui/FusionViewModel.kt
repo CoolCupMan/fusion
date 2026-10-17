@@ -148,6 +148,8 @@ class FusionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setAutoBlockDangerous(v: Boolean) = viewModelScope.launch { repo.setAutoBlockDangerous(v) }
 
+    fun setOverlayAlerts(v: Boolean) = viewModelScope.launch { repo.setOverlayAlerts(v) }
+
     /**
      * Freeze/unfreeze all traffic (kill switch). Freezing rebuilds the tunnel to
      * capture and drop every packet; if protection is off, [onNeedStart] is

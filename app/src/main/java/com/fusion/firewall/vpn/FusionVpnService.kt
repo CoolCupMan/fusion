@@ -67,6 +67,10 @@ class FusionVpnService : VpnService() {
 
     private val seenAllowed = ConcurrentHashMap.newKeySet<String>()
 
+    private val overlay by lazy { BlockOverlay(this) }
+    @Volatile private var lastOverlayAt = 0L
+    @Volatile private var lastOverlayDomain: String? = null
+
     // Realtime heuristic: distinct tracker domains seen per app uid, and uids
     // we have already auto-blocked this session.
     private val uidTrackers = ConcurrentHashMap<Int, MutableSet<String>>()
@@ -263,6 +267,7 @@ class FusionVpnService : VpnService() {
     private fun record(uid: Int, domain: String, blocked: Boolean) {
         val info = if (uid > 0) app.container.appInfo.appForUid(uid) else null
         maybeAutoBlockDangerous(uid, domain, info?.packageName)
+        if (blocked) maybeShowOverlay(info?.label ?: "An app", domain, info?.packageName)
         val byApp = blocked && app.container.domainBlocker.isBlockedUid(uid)
         val event = ConnectionEvent(
             timestamp = System.currentTimeMillis(),
@@ -302,6 +307,40 @@ class FusionVpnService : VpnService() {
         }
     }
 
+    /**
+     * Pop the tiny floating bubble when traffic is blocked, so the user can
+     * instantly unblock it or keep it blocked without opening the app. Throttled
+     * and coalesced so rapid drops don't thrash the window.
+     */
+    private fun maybeShowOverlay(appLabel: String, domain: String, pkg: String?) {
+        if (!settings.overlayAlerts) return
+        if (!BlockOverlay.canShow(this)) return
+        val now = System.currentTimeMillis()
+        // Coalesce: skip if we just showed the same domain, or fired < 700ms ago.
+        if (domain == lastOverlayDomain && now - lastOverlayAt < 4000) return
+        if (now - lastOverlayAt < 700) return
+        lastOverlayAt = now
+        lastOverlayDomain = domain
+        overlay.show(
+            appLabel = appLabel,
+            domain = domain,
+            unblock = {
+                scope.launch {
+                    app.container.blockLists.addWhitelist(domain)
+                    app.container.blockLists.removeCustom(domain)
+                    if (pkg != null) app.container.repository.setPolicy(pkg, Policy.ALLOW)
+                }
+            },
+            open = {
+                runCatching {
+                    val i = packageManager.getLaunchIntentForPackage(packageName)
+                        ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(i)
+                }
+            },
+        )
+    }
+
     private fun startForegroundNotification() {
         NotificationHelper.ensureChannels(this)
         ServiceCompat.startForeground(this, NOTIF_ID, NotificationHelper.serviceNotification(this), 0)
@@ -313,6 +352,7 @@ class FusionVpnService : VpnService() {
 
     private fun stopTunnel() {
         isRunning.value = false
+        runCatching { overlay.hide() }
         packetThread?.interrupt()
         packetThread = null
         tunnel?.let { runCatching { it.close() } }

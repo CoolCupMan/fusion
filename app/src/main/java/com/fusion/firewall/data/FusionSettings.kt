@@ -33,6 +33,8 @@ data class FusionSettings(
     val autoBlockDangerous: Boolean = false,
     /** Kill switch: route all traffic into the tunnel and drop it (no data in/out). */
     val frozen: Boolean = false,
+    /** Show a tiny floating overlay bubble over other apps when traffic is blocked. */
+    val overlayAlerts: Boolean = false,
     /** General-purpose AI chat. Provider + per-provider key/model are user-supplied. */
     val chatProvider: ChatProvider = ChatProvider.ANTHROPIC,
     val chatEndpoint: String = "https://api.anthropic.com/v1/messages",

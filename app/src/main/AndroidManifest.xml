@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Tiny floating "blocked" bubble over other apps (user grants it in
+         system settings; the overlay simply doesn't show until then). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Export snapshots to the public Download folder on older devices. API 29+
          uses MediaStore and needs no storage permission. -->
     <uses-permission

@@ -47,6 +47,7 @@ fun FusionRoot(
     viewModel: FusionViewModel,
     onToggleFirewall: (Boolean) -> Unit,
     onOpenUsageAccessSettings: () -> Unit,
+    onOpenOverlaySettings: () -> Unit = {},
     onImportSnapshot: () -> Unit = {},
     onRestartApp: () -> Unit = {},
 ) {
@@ -107,6 +108,7 @@ fun FusionRoot(
                 viewModel, onOpenUsageAccessSettings, content,
                 onImportSnapshot = onImportSnapshot,
                 onRestartApp = onRestartApp,
+                onOpenOverlaySettings = onOpenOverlaySettings,
             )
         }
     }

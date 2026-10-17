@@ -83,6 +83,20 @@ class MainActivity : ComponentActivity() {
                     startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))
                 }
             },
+            onOpenOverlaySettings = {
+                runCatching {
+                    startActivity(
+                        Intent(
+                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            android.net.Uri.parse("package:$packageName"),
+                        )
+                    )
+                }.onFailure {
+                    runCatching {
+                        startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                    }
+                }
+            },
             onImportSnapshot = {
                 runCatching { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }
             },

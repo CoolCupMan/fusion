@@ -45,6 +45,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     onImportSnapshot: () -> Unit = {},
     onRestartApp: () -> Unit = {},
+    onOpenOverlaySettings: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsState()
     var endpoint by remember(settings.binaryCoreEndpoint) { mutableStateOf(settings.binaryCoreEndpoint) }
@@ -83,6 +84,31 @@ fun SettingsScreen(
             checked = settings.promptOnNewApps,
             onChange = { viewModel.setPromptOnNewApps(it) },
         )
+
+        SectionHeader("Floating block alerts")
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val canOverlay = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M ||
+            android.provider.Settings.canDrawOverlays(ctx)
+        Text(
+            "Pops a tiny bubble over whatever app you're using the moment its traffic is " +
+                "blocked (e.g. Chrome reaching a blocked link). Tap it to instantly unblock, " +
+                "keep it blocked, or open Fusion — works for every app. Needs the " +
+                "\"draw over other apps\" permission.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        )
+        ToggleRow(
+            title = "Show block bubble over apps",
+            subtitle = if (canOverlay) "Permission granted."
+                else "Grant \"draw over other apps\" below for the bubble to appear.",
+            checked = settings.overlayAlerts,
+            onChange = { viewModel.setOverlayAlerts(it) },
+        )
+        if (!canOverlay) {
+            OutlinedButton(onClick = onOpenOverlaySettings, modifier = Modifier.fillMaxWidth()) {
+                Text("Grant \"draw over other apps\"")
+            }
+        }
 
         SectionHeader("BinaryCore engine")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
